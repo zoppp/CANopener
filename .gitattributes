@@ -1,0 +1,5 @@
+* text=auto
+*.png binary
+*.ico binary
+*.blf binary
+*.canbin binary

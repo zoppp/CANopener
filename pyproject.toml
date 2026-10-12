@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "canopener"
+version = "0.2.1"
+description = "CANopener: open-source CAN engineering toolbox (receive, trace, transmit, record/replay, statistics, CANopen node commissioning)"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = [
+    "python-can>=4.6",
+    "canopen>=2.4",
+    "pyserial>=3.5",
+    "fastapi>=0.110",
+    "uvicorn>=0.30",
+    "websockets>=12",
+    "mcp>=2",
+]
+
+[project.optional-dependencies]
+app = ["pywebview>=5"]
+gs_usb = ["gs_usb>=0.3", "pyusb>=1.2", "libusb-package>=1.0"]
+decode = ["cantools>=39"]
+dev = ["pytest>=8", "httpx>=0.27", "pyinstaller>=6"]
+
+[project.scripts]
+canopener = "canopener.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["canopener*"]
+
+[tool.setuptools.package-data]
+canopener = ["nodes/recipes*.json", "ui/**/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

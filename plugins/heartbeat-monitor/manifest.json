@@ -1,0 +1,7 @@
+{
+  "id": "heartbeat-monitor",
+  "title": "Heartbeat monitor",
+  "version": "1.0",
+  "description": "CANopen heartbeats per node: NMT state, period, last seen, missed beats. Example plugin.",
+  "module": "plugin.py"
+}

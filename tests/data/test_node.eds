@@ -1,0 +1,222 @@
+[FileInfo]
+FileName=test_node.eds
+FileVersion=1
+FileRevision=0
+EDSVersion=4.0
+Description=CANopener test node (matches the TPDO1 of canopener/sim.py nodes)
+CreatedBy=CANopener tests
+
+[DeviceInfo]
+VendorName=CANopener
+VendorNumber=0x00000CA0
+ProductName=Test node
+ProductNumber=0x00001001
+BaudRate_250=1
+SimpleBootUpSlave=1
+NrOfRXPDO=1
+NrOfTXPDO=1
+
+[MandatoryObjects]
+SupportedObjects=3
+1=0x1000
+2=0x1001
+3=0x1018
+
+[1000]
+ParameterName=Device type
+ObjectType=0x7
+DataType=0x0007
+AccessType=ro
+DefaultValue=0x00000191
+PDOMapping=0
+
+[1001]
+ParameterName=Error register
+ObjectType=0x7
+DataType=0x0005
+AccessType=ro
+DefaultValue=0
+PDOMapping=1
+
+[1018]
+ParameterName=Identity
+ObjectType=0x9
+SubNumber=3
+
+[1018sub0]
+ParameterName=Number of entries
+ObjectType=0x7
+DataType=0x0005
+AccessType=ro
+DefaultValue=2
+PDOMapping=0
+
+[1018sub1]
+ParameterName=Vendor id
+ObjectType=0x7
+DataType=0x0007
+AccessType=ro
+DefaultValue=0x00000CA0
+PDOMapping=0
+
+[1018sub2]
+ParameterName=Product code
+ObjectType=0x7
+DataType=0x0007
+AccessType=ro
+DefaultValue=0x00001001
+PDOMapping=0
+
+[OptionalObjects]
+SupportedObjects=5
+1=0x1008
+2=0x1400
+3=0x1600
+4=0x1800
+5=0x1A00
+
+[1008]
+ParameterName=Device name
+ObjectType=0x7
+DataType=0x0009
+AccessType=const
+DefaultValue=Test node
+PDOMapping=0
+
+[1400]
+ParameterName=RPDO1 communication
+ObjectType=0x9
+SubNumber=3
+
+[1400sub0]
+ParameterName=Highest sub-index
+ObjectType=0x7
+DataType=0x0005
+AccessType=ro
+DefaultValue=2
+PDOMapping=0
+
+[1400sub1]
+ParameterName=COB-ID
+ObjectType=0x7
+DataType=0x0007
+AccessType=rw
+DefaultValue=$NODEID+0x200
+PDOMapping=0
+
+[1400sub2]
+ParameterName=Transmission type
+ObjectType=0x7
+DataType=0x0005
+AccessType=rw
+DefaultValue=255
+PDOMapping=0
+
+[1600]
+ParameterName=RPDO1 mapping
+ObjectType=0x9
+SubNumber=2
+
+[1600sub0]
+ParameterName=Number of mapped objects
+ObjectType=0x7
+DataType=0x0005
+AccessType=rw
+DefaultValue=1
+PDOMapping=0
+
+[1600sub1]
+ParameterName=Mapped object 1
+ObjectType=0x7
+DataType=0x0007
+AccessType=rw
+DefaultValue=0x22020008
+PDOMapping=0
+
+[1800]
+ParameterName=TPDO1 communication
+ObjectType=0x9
+SubNumber=3
+
+[1800sub0]
+ParameterName=Highest sub-index
+ObjectType=0x7
+DataType=0x0005
+AccessType=ro
+DefaultValue=2
+PDOMapping=0
+
+[1800sub1]
+ParameterName=COB-ID
+ObjectType=0x7
+DataType=0x0007
+AccessType=rw
+DefaultValue=$NODEID+0x180
+PDOMapping=0
+
+[1800sub2]
+ParameterName=Transmission type
+ObjectType=0x7
+DataType=0x0005
+AccessType=rw
+DefaultValue=255
+PDOMapping=0
+
+[1A00]
+ParameterName=TPDO1 mapping
+ObjectType=0x9
+SubNumber=3
+
+[1A00sub0]
+ParameterName=Number of mapped objects
+ObjectType=0x7
+DataType=0x0005
+AccessType=rw
+DefaultValue=2
+PDOMapping=0
+
+[1A00sub1]
+ParameterName=Mapped object 1
+ObjectType=0x7
+DataType=0x0007
+AccessType=rw
+DefaultValue=0x22000010
+PDOMapping=0
+
+[1A00sub2]
+ParameterName=Mapped object 2
+ObjectType=0x7
+DataType=0x0007
+AccessType=rw
+DefaultValue=0x22010010
+PDOMapping=0
+
+[ManufacturerObjects]
+SupportedObjects=3
+1=0x2200
+2=0x2201
+3=0x2202
+
+[2200]
+ParameterName=Position
+ObjectType=0x7
+DataType=0x0003
+AccessType=ro
+DefaultValue=0
+PDOMapping=1
+
+[2201]
+ParameterName=Counter
+ObjectType=0x7
+DataType=0x0006
+AccessType=ro
+DefaultValue=0
+PDOMapping=1
+
+[2202]
+ParameterName=Command
+ObjectType=0x7
+DataType=0x0005
+AccessType=rw
+DefaultValue=0
+PDOMapping=1

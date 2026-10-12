@@ -1,0 +1,66 @@
+{
+  "default": {
+    "name": "generic-lss",
+    "method": "lss",
+    "effect": "immediate",
+    "verify_on_new_id": true,
+    "note": "CiA 305 LSS: switch-selective by 0x1018 identity, configure node-ID, store, switch off, NMT reset communication (0x82) to the old id."
+  },
+  "vendors": {
+    "0x0CA0": {
+      "name": "sim-demo-a",
+      "product_code": "0x53494D01",
+      "method": "sdo",
+      "steps": [
+        {
+          "index": "0x2100",
+          "sub": 0,
+          "type": "u8",
+          "value": "$NEW_ID"
+        }
+      ],
+      "store": "0x1010:01",
+      "effect": "nmt_reset",
+      "node_id_range": [
+        1,
+        127
+      ],
+      "verify_on_new_id": true,
+      "note": "Demo device A of the built-in simulator: 0x2100:00 sets the pending node id, the store commits it, an NMT reset applies it.",
+      "source": "canopener/sim.py",
+      "baud_sdo": {
+        "index": "0x2101",
+        "sub": 0,
+        "type": "u16",
+        "unit": "kbit/s",
+        "min": 10,
+        "max": 1000,
+        "store": "0x1010:01",
+        "effect": "nmt_reset"
+      }
+    },
+    "0x0CA1": {
+      "name": "sim-demo-b",
+      "product_code": "0x53494D02",
+      "method": "sdo",
+      "steps": [
+        {
+          "index": "0x2110",
+          "sub": 1,
+          "type": "u8",
+          "value": "$NEW_ID"
+        }
+      ],
+      "store": "0x1010:01",
+      "effect": "power_cycle",
+      "node_id_range": [
+        1,
+        127
+      ],
+      "verify_on_new_id": false,
+      "note": "Demo device B of the built-in simulator: 0x2110:01 plus a store; the new id only takes effect after a power cycle.",
+      "source": "canopener/sim.py"
+    }
+  },
+  "unknown": {}
+}

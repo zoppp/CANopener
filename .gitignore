@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+build/
+dist/
+*.trc
+logs/
+recordings/
+recipes/user-recipes.json
+packaging/build_info.json
+settings.json
+projects/
+plugins-local/
+.claude/

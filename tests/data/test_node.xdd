@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- CANopener test node as CiA 311 XDD (object list only), same TPDO1 as test_node.eds -->
+<ISO15745ProfileContainer xmlns="http://www.canopen.org/xml/1.1">
+  <ISO15745Profile>
+    <ProfileBody>
+      <ApplicationLayers>
+        <CANopenObjectList>
+          <CANopenObject index="1000" name="Device type" objectType="7" dataType="0007" accessType="ro" defaultValue="0x00000191"/>
+          <CANopenObject index="1800" name="TPDO1 communication" objectType="9" subNumber="2">
+            <CANopenSubObject subIndex="00" name="Highest sub-index" objectType="7" dataType="0005" accessType="ro" defaultValue="1"/>
+            <CANopenSubObject subIndex="01" name="COB-ID" objectType="7" dataType="0007" accessType="rw" defaultValue="$NODEID+0x180"/>
+          </CANopenObject>
+          <CANopenObject index="1A00" name="TPDO1 mapping" objectType="9" subNumber="3">
+            <CANopenSubObject subIndex="00" name="Number of mapped objects" objectType="7" dataType="0005" accessType="rw" defaultValue="2"/>
+            <CANopenSubObject subIndex="01" name="Mapped object 1" objectType="7" dataType="0007" accessType="rw" defaultValue="0x22000010"/>
+            <CANopenSubObject subIndex="02" name="Mapped object 2" objectType="7" dataType="0007" accessType="rw" defaultValue="0x22010010"/>
+          </CANopenObject>
+          <CANopenObject index="2200" name="Position" objectType="7" dataType="0003" accessType="ro" defaultValue="0" lowLimit="-500" highLimit="500"/>
+          <CANopenObject index="2201" name="Counter" objectType="7" dataType="0006" accessType="ro" defaultValue="0"/>
+        </CANopenObjectList>
+      </ApplicationLayers>
+    </ProfileBody>
+  </ISO15745Profile>
+</ISO15745ProfileContainer>

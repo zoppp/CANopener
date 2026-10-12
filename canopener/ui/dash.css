@@ -1,0 +1,60 @@
+/* Dashboards tab (js/dash.js). Colours come from the theme variables in app.css. */
+.dash-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-auto-rows: 40px; gap: 8px; min-height: 100%; }
+.dash-grid.editing { min-height: calc(100% + 200px);
+  background-image: linear-gradient(to bottom, var(--line) 1px, transparent 1px); background-size: 100% 48px; }
+.dash-w { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--bg2);
+  border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.dash-grid.editing .dash-w { border-style: dashed; border-color: var(--line2); }
+.dash-wh { display: flex; align-items: center; gap: 4px; padding: 2px 4px 2px 9px; min-height: 26px; font-size: 12px;
+  font-weight: 600; color: var(--fg2); border-bottom: 1px solid var(--line); }
+.dash-grid.editing .dash-wh { cursor: move; background: var(--bg3); touch-action: none; }
+.dash-wt { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dash-wc { display: flex; gap: 2px; align-items: center; font-weight: 400; }
+.dash-wc select { padding: 0 4px; font-size: 11.5px; }
+.dash-wc .btn, .dash-edit .btn { padding: 0 6px; font-size: 12px; }
+.dash-edit { display: none; gap: 2px; }
+.dash-grid.editing .dash-edit { display: flex; }
+.dash-wb { flex: 1; min-height: 0; overflow: hidden; position: relative; container-type: size; }
+.dash-rs { display: none; position: absolute; right: 0; bottom: 0; width: 16px; height: 16px; cursor: nwse-resize;
+  touch-action: none; background: linear-gradient(135deg, transparent 50%, var(--fg3) 50%); border-bottom-right-radius: 8px; }
+.dash-grid.editing .dash-rs { display: block; }
+.dash-empty { grid-column: 1 / -1; grid-row: 1 / span 3; }
+
+/* numeric tile, lamp, gauge */
+.dash-num { height: 100%; display: flex; align-items: baseline; justify-content: center; gap: 6px; padding: 0 8px;
+  white-space: nowrap; overflow: hidden; }
+.dash-num .v { font-family: var(--mono); font-size: clamp(14px, min(55cqh, 18cqw), 72px); font-weight: 600;
+  align-self: center; }
+.dash-num .u { color: var(--fg2); font-size: clamp(11px, 18cqh, 20px); align-self: center; }
+.dash-lamp { height: 100%; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 0 8px; }
+.dash-lamp i { width: clamp(14px, 55cqh, 60px); aspect-ratio: 1; border-radius: 50%; border: 1px solid var(--line2);
+  flex: none; box-shadow: inset 0 -3px 6px rgba(0,0,0,.25); }
+.dash-lamp span { font-family: var(--mono); color: var(--fg2); white-space: nowrap; overflow: hidden; }
+.dash-gauge { width: 100%; height: 100%; display: block; }
+.dash-gauge .track { fill: none; stroke: var(--bg3); stroke-width: 14; }
+.dash-gauge .val { fill: none; stroke-width: 14; }
+.dash-gauge .bands path { fill: none; stroke-width: 4; }
+.dash-gauge text { fill: var(--fg); text-anchor: middle; font-family: var(--mono); }
+.dash-gauge .gv { font-size: 26px; font-weight: 600; }
+.dash-gauge .gu, .dash-gauge .gl { font-size: 11px; fill: var(--fg2); }
+
+/* plots (uPlot) */
+.dash-wb .uplot { width: 100%; }
+.dash-wb .u-legend { font-size: 11.5px; color: var(--fg2); }
+.dash-wb .u-legend .u-series > * { padding: 1px 4px; }
+.dash-wb .u-select { background: var(--sel); }
+.dash-wb .u-note { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  color: var(--fg3); pointer-events: none; font-size: 12px; }
+
+/* editors */
+.dash-picker { border: 1px solid var(--line); border-radius: 6px; padding: 6px; display: flex; flex-direction: column; gap: 5px; }
+.dash-plist { max-height: 180px; overflow: auto; }
+.dash-pitem { display: flex; gap: 10px; justify-content: space-between; padding: 2px 6px; border-radius: 4px; cursor: pointer; }
+.dash-pitem:hover { background: var(--sel); }
+.dash-pitem .m { font-family: var(--mono); font-size: 12px; }
+.dash-list .row { padding: 2px 0; }
+.dash-list .m { font-family: var(--mono); font-size: 12px; flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.dash-list input[type=color], .dash-color { width: 34px; height: 24px; padding: 1px 2px; }
+.dash-q td { padding: 2px 3px; }
+.dash-q input, .dash-q select { padding: 1px 4px; font-size: 12px; }
+.dash-q td.pv { min-width: 90px; font-family: var(--mono); font-size: 12px; }

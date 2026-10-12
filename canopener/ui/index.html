@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CANopener</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="vendor/uplot/uPlot.min.css">
+<link rel="stylesheet" href="dash.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><img src="icon.svg" alt="" width="22" height="22"><span>CANopener</span></div>
+  <div id="chips" class="chips"></div>
+  <button class="btn primary" id="btn-connect" title="Connect an adapter (Ctrl+K)">+ Connect</button>
+  <div class="spacer"></div>
+  <div id="rec-indicator" class="rec-indicator" hidden></div>
+  <button class="btn ghost" id="btn-project" title="Projects: save / open the transmit list and connections">Project</button>
+  <button class="btn ghost icon" id="btn-theme" title="Light / dark">&#9681;</button>
+  <button class="btn ghost icon" id="btn-about" title="About">?</button>
+</header>
+<nav class="tabs" id="tabs"></nav>
+<main id="view"></main>
+<footer class="statusbar">
+  <div id="status-channels" class="status-channels">Not connected</div>
+  <div class="spacer"></div>
+  <button class="btn ghost small" id="btn-events" title="Event log">Log <span id="event-badge" class="badge" hidden>0</span></button>
+</footer>
+<aside id="events" class="drawer" hidden>
+  <div class="drawer-head"><b>Event log</b><div class="spacer"></div><button class="btn ghost small" id="btn-events-close">Close</button></div>
+  <div id="events-list" class="events-list mono"></div>
+</aside>
+<div id="toasts" class="toasts"></div>
+<dialog id="modal"><form method="dialog" id="modal-form"></form></dialog>
+
+<script src="js/core.js"></script>
+<script src="js/connect.js"></script>
+<script src="js/receive.js"></script>
+<script src="js/trace.js"></script>
+<script src="js/record.js"></script>
+<script src="js/stats.js"></script>
+<script src="js/nodes.js"></script>
+<script src="js/decode.js"></script>
+<script src="vendor/uplot/uPlot.iife.min.js"></script>
+<script src="js/dash.js"></script>
+<script src="js/plugins.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
