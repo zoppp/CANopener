@@ -26,12 +26,19 @@ commissioning, plugins and an MCP endpoint for Claude.
 | Exact-frame preview before any node change | Dashboards |
 |---|---|
 | ![Set ID preview](docs/img/nodes-preview.png) | ![Dashboards](docs/img/dashboards.png) |
+| **CANopen decoding: object dictionary, EMCY** | **J1939: address claims, DM1, transport protocol** |
+| ![CANopen decoding](docs/img/decode-canopen.png) | ![J1939 decoding](docs/img/decode-j1939.png) |
 
-Read the [user guide](docs/user-guide.md).
+**[User guide](docs/user-guide.md)**: getting started, adapters, every tab, and walkthroughs (find the ID that
+floods a bus, record a fault, give a CANopen node a new ID, commission an unknown device, decode with a DBC,
+build a dashboard, use Claude). The release zip has it as `docs\user-guide.html` for offline reading, and the
+app opens it from the About box.
 
 ## Download
 
 Windows: download `canopener-<version>-win64.zip` from the Releases page, unzip, double-click `canopener.exe`.
+Windows SmartScreen may warn the first time (the exe is not signed): **More info**, **Run anyway**. No adapter
+at hand? Connect the **Virtual** interface with simulated devices ticked.
 
 ## From source
 
@@ -46,6 +53,10 @@ python -m venv .venv
 ```
 
 Build the Windows release: `powershell -ExecutionPolicy Bypass -File packaging\build.ps1`.
+
+Docs: `docs\screenshots.py` regenerates the screenshots from the simulator (headless Edge), and
+`docs\build_guide.py` turns `docs/user-guide.md` and `docs/PLUGINS.md` into the offline HTML pages the release
+ships.
 
 ## How it is built
 

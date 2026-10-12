@@ -164,14 +164,15 @@
       <span>Plugins</span><span>${a.extensions.length} loaded${a.extension_errors.length ? `, ${a.extension_errors.length} failed` : ""}</span>
       <span>Licence</span><span>MIT</span></div>
       <p class="small muted">Open-source CAN toolbox: receive, trace, transmit, record &amp; replay, statistics, CANopen node commissioning.
-      Recordings and logs are in the app folder (recordings\\, logs\\).</p>` });
+      Recordings and logs are in the app folder (recordings\\, logs\\).</p>
+      <p><a class="btn primary" href="/guide/user-guide.html" target="_blank" rel="noopener">User guide</a></p>` });
   };
 
   CO.$("#btn-project").onclick = async () => {
     const d = await CO.api("/api/projects");
     const list = d.projects.map((p) => `<option value="${CO.esc(p.name)}">${CO.esc(p.name)}</option>`).join("");
     const res = await CO.modal({ title: "Projects", body: `
-      <p class="small muted">A project keeps the transmit list, the adapter settings and the view layout.</p>
+      <p class="small muted">A project keeps the transmit list, the adapter connections, the decoders (DBC, EDS, J1939), the dashboards and the quick signals.</p>
       <label class="field"><span>Save current setup as</span><input id="p-name" value="${CO.esc(d.current || "")}" placeholder="e.g. test rig 2"></label>
       <label class="field"><span>Or open</span><select id="p-open" ${d.projects.length ? "" : "disabled"}>${list || "<option>no saved projects</option>"}</select></label>`,
       buttons: [{ label: "Cancel", value: "cancel" }, { label: "Open", value: "open", disabled: !d.projects.length }, { label: "Save", value: "save", cls: "primary" }] });

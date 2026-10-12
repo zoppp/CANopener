@@ -37,8 +37,10 @@ if (ROOT / "packaging" / "build_info.json").is_file():     # written by build.ps
     datas.append((str(ROOT / "packaging" / "build_info.json"), "."))
 if (ROOT / "plugins").is_dir():
     datas.append((str(ROOT / "plugins"), "plugins"))
-if (ROOT / "docs").is_dir():
-    datas.append((str(ROOT / "docs"), "docs"))
+# the user guide (served at /guide/, About box link): only the HTML pages and their screenshots
+datas += [(str(p), "docs") for p in sorted((ROOT / "docs").glob("*.html"))]
+if (ROOT / "docs" / "img").is_dir():
+    datas.append((str(ROOT / "docs" / "img"), "docs/img"))
 
 a = Analysis(
     [str(ROOT / "packaging" / "launcher.py")],

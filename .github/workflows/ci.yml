@@ -45,7 +45,7 @@ jobs:
       - name: Tag matches the version
         shell: pwsh
         run: |
-          $v = python -c "import tomllib;print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])"
+          $v = python -c "import canopener;print(canopener.__version__)"
           if ("v$v" -ne "${{ github.ref_name }}") { throw "tag ${{ github.ref_name }} does not match version $v" }
       - name: Build
         shell: pwsh

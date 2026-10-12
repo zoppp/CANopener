@@ -4,7 +4,8 @@ SimBus starts on a python-can `virtual` channel (in this process only) and adds:
 - CANopen nodes that answer SDO (identity, name, the vendor node-id objects of the bundled recipes), send
   heartbeats and TPDOs, and really move to their new node id after the recipe's store + NMT reset;
 - a CiA 305 LSS slave per LSS-capable node (switch global/selective, configure node id / bit timing, store);
-- some non-CANopen traffic: a fast 11-bit frame and J1939-style extended frames.
+- some non-CANopen traffic: a fast 11-bit frame and J1939 frames (two ECUs claiming addresses, a DM1 by single
+  frame and one by BAM transport protocol), and now and then two CANopen emergency messages.
 """
 
 from __future__ import annotations
@@ -28,6 +29,11 @@ DEFAULT_NODES = (
     (10, "Demo device B (SDO, power cycle)", 0x0CA1, 0x53494D02, (0x2110, 1), True, False),
     (20, "Demo LSS device", 0x0CA2, 0x53494D03, None, False, True),
 )
+
+
+def _j1939_name(identity: int, function: int) -> bytes:
+    """The NAME of a J1939 address claim (arbitrary address capable)."""
+    return ((1 << 63) | (function << 40) | identity).to_bytes(8, "little")
 
 
 class SimNode:
@@ -132,6 +138,18 @@ class SimBus(can.Listener):
                     self.send(0x18FEF100, bytes([0xFF, n & 0xFF, 0x20, 0, 0, 0, 0, 0xFF]), ext=True)  # J1939 CCVS-like
                 if n % 50 == 0:
                     self.send(0x18F00400, bytes([0xF0, 0x7D, 0x7D, (n >> 2) & 0xFF, 0x0C, 0, 0xF0, 0x7D]), ext=True)
+                if n % 100 == 50:                   # J1939 DM1 of SA 0x00: amber lamp, SPN 110 FMI 0 OC 3
+                    self.send(0x18FECA00, bytes.fromhex("04FF6E000003FFFF"), ext=True)
+                if n % 500 == 1:                    # address claims (normally at power-up; repeated for late viewers)
+                    self.send(0x18EEFF00, _j1939_name(0x1234, 0), ext=True)
+                    self.send(0x18EEFF28, _j1939_name(0x0042, 60), ext=True)
+                if n % 3000 == 250:                 # every 30 s a two-packet DM1 of SA 0x28 by BAM (transport protocol)
+                    self.send(0x1CECFF28, bytes.fromhex("200A0002FFCAFE00"), ext=True)
+                    self.send(0x1CEBFF28, bytes.fromhex("0104FF64000101BE"), ext=True)
+                    self.send(0x1CEBFF28, bytes.fromhex("02000402FFFFFFFF"), ext=True)
+                if n % 6000 == 300:                 # every minute CANopen emergencies: node 5 voltage, node 10 heartbeat
+                    self.send(0x080 + self.nodes[0].node_id, bytes.fromhex("1032050000000000"))
+                    self.send(0x080 + self.nodes[1].node_id, bytes.fromhex("3081110000000000"))
             for node in self.nodes:
                 if n % 10 == 0:
                     self.send(0x180 + node.node_id, struct.pack("<hH", int(500 * math.cos(now)), n & 0xFFFF))

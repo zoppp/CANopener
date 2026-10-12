@@ -1,6 +1,9 @@
 CANopener - CAN toolbox (PCAN-View replacement)
 ================================================
 
+The full user guide with screenshots: docs\user-guide.html (double-click it; also "User guide" in the
+app's About box, the ? at the top right).
+
 START
   1. Unzip the whole folder somewhere you can write to (Desktop, Documents - not Program Files).
   2. Double-click canopener.exe.

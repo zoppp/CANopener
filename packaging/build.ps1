@@ -8,7 +8,7 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 $out = if ($OutDir) { $OutDir } else { Join-Path (Split-Path -Parent $root) "canopener-release" }   # next to the repository
 $py = if ($Python) { $Python } else { Join-Path $root ".venv\Scripts\python.exe" }   # CI passes -Python python
-$version = (& $py -c "import tomllib;print(tomllib.load(open(r'$root\pyproject.toml','rb'))['project']['version'])").Trim()
+$version = (& $py -c "import sys;sys.path.insert(0,r'$root');import canopener;print(canopener.__version__)").Trim()   # YYYY.MM.DD.HHMM
 
 # Which build this is (About box): version, commit, uncommitted changes, build time.
 $commit = (git -C $root rev-parse --short HEAD).Trim()
@@ -30,6 +30,11 @@ $app = Join-Path $dist "canopener"
 Copy-Item (Join-Path $PSScriptRoot "README-ZIP.txt") (Join-Path $app "README.txt") -Force
 New-Item -ItemType Directory -Force (Join-Path $app "recordings") | Out-Null
 New-Item -ItemType Directory -Force (Join-Path $app "plugins") | Out-Null
+# the user guide next to the exe too (double-click docs\user-guide.html; the app also serves it at /guide/)
+$docs = Join-Path $app "docs"
+New-Item -ItemType Directory -Force (Join-Path $docs "img") | Out-Null
+Copy-Item (Join-Path $root "docs\*.html") $docs -Force
+Copy-Item (Join-Path $root "docs\img\*.png") (Join-Path $docs "img") -Force
 Set-Content -Encoding utf8 (Join-Path $app "plugins\PUT-YOUR-PLUGINS-HERE.txt") "Plugins in this folder are loaded at start (restart CANopener after adding one). The shipped example is in _internal\plugins\heartbeat-monitor."
 
 # The exe must start: a module PyInstaller left out fails here, not on another PC.

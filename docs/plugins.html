@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Writing CANopener plugins</title>
+<style>
+:root {
+  --bg: #f6f7f9; --surface: #ffffff; --ink: #18202a; --muted: #5b6673; --rule: #d9dee4;
+  --accent: #1f6feb; --accent-soft: #e7f0fe; --code-bg: #eef1f4; --note-rule: #8fb4ee; --mat: #0d1117;
+  --font-body: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+  --font-mono: "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1318; --surface: #161b22; --ink: #e2e8ee; --muted: #9aa7b4; --rule: #2a323c;
+    --accent: #58a6ff; --accent-soft: #15243a; --code-bg: #1d242d; --note-rule: #2f5b94; --mat: #05080b;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1318; --surface: #161b22; --ink: #e2e8ee; --muted: #9aa7b4; --rule: #2a323c;
+  --accent: #58a6ff; --accent-soft: #15243a; --code-bg: #1d242d; --note-rule: #2f5b94; --mat: #05080b;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 16px; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.6 var(--font-body); }
+a { color: var(--accent); text-underline-offset: 2px; }
+.layout { display: grid; grid-template-columns: 270px minmax(0, 1fr); max-width: 1320px; margin: 0 auto; }
+nav.toc { position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; padding: 24px 16px 40px 20px;
+  border-right: 1px solid var(--rule); font-size: 14px; }
+nav.toc .brand { font-weight: 700; font-size: 17px; margin-bottom: 4px; }
+nav.toc .brand a { color: var(--ink); text-decoration: none; }
+nav.toc .sub { color: var(--muted); font-size: 13px; margin-bottom: 14px; }
+nav.toc ul { list-style: none; margin: 0; padding: 0; }
+nav.toc li { margin: 1px 0; }
+nav.toc ul ul { padding-left: 12px; border-left: 1px solid var(--rule); margin: 2px 0 6px 6px; }
+nav.toc a { display: block; padding: 3px 8px; border-radius: 6px; color: var(--ink); text-decoration: none; }
+nav.toc ul ul a { color: var(--muted); font-size: 13px; padding: 2px 8px; }
+nav.toc a:hover, nav.toc a.on { background: var(--accent-soft); color: var(--accent); }
+nav.toc .tools { margin-top: 16px; display: flex; gap: 8px; }
+button.theme { font: inherit; font-size: 13px; padding: 4px 10px; border: 1px solid var(--rule); border-radius: 6px;
+  background: var(--surface); color: var(--ink); cursor: pointer; }
+main { padding: 32px 48px 80px; min-width: 0; }
+article { max-width: 940px; }
+h1 { font-size: 34px; line-height: 1.2; margin: 0 0 12px; }
+h2 { font-size: 26px; line-height: 1.25; margin: 56px 0 12px; padding-top: 12px; border-top: 1px solid var(--rule); }
+h3 { font-size: 20px; margin: 32px 0 8px; }
+h4 { font-size: 17px; margin: 24px 0 6px; }
+h2 + h3 { margin-top: 16px; }
+p, ul, ol, table, pre, blockquote, figure { margin: 0 0 16px; }
+li { margin: 3px 0; }
+li > p { margin: 0 0 6px; }
+code { font-family: var(--font-mono); font-size: 0.88em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+pre { background: var(--code-bg); padding: 12px 14px; border-radius: 8px; overflow-x: auto; line-height: 1.45; }
+pre code { background: none; padding: 0; font-size: 13.5px; }
+table { border-collapse: collapse; width: 100%; font-size: 15px; display: block; overflow-x: auto; }
+th, td { text-align: left; vertical-align: top; padding: 7px 10px; border-bottom: 1px solid var(--rule); }
+th { background: var(--surface); font-weight: 600; border-bottom: 2px solid var(--rule); }
+blockquote { background: var(--accent-soft); border-left: 4px solid var(--note-rule); padding: 10px 14px; border-radius: 0 8px 8px 0; }
+blockquote p:last-child { margin-bottom: 0; }
+figure { background: var(--mat); padding: 10px; border-radius: 10px; }
+figure img { display: block; width: 100%; height: auto; border-radius: 4px; }
+figcaption { color: #9aa7b4; font-size: 13px; padding: 8px 4px 0; }
+img { max-width: 100%; }
+hr { border: 0; border-top: 1px solid var(--rule); margin: 32px 0; }
+footer { color: var(--muted); font-size: 13px; margin-top: 64px; padding-top: 16px; border-top: 1px solid var(--rule); }
+@media (max-width: 900px) {
+  .layout { display: block; }
+  nav.toc { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--rule); padding: 16px; }
+  nav.toc ul ul { display: none; }
+  main { padding: 20px 16px 60px; }
+  h1 { font-size: 28px; }
+}
+@media print {
+  nav.toc { display: none; }
+  .layout { display: block; }
+  main { padding: 0; }
+  figure { background: none; padding: 0; }
+  h2 { break-after: avoid; }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+<nav class="toc" aria-label="Contents">
+  <div class="brand"><a href="#top">Writing CANopener plugins</a></div>
+  <div class="sub">CANopener documentation</div>
+  <ul><li><a href="#where-plugins-are-loaded-from">Where plugins are loaded from</a></li><li><a href="#folder-layout">Folder layout</a></li><li><a href="#the-module">The module</a><ul><li><a href="#frames">Frames</a></li><li><a href="#what-to-use-from-svc">What to use from svc</a></li></ul></li><li><a href="#ui-scripts">UI scripts</a></li><li><a href="#mcp-tool-rules">MCP tool rules</a></li></ul>
+  <div class="tools"><button class="theme" id="theme" type="button">Light / dark</button></div>
+</nav>
+<main id="top">
+<article>
+<h1 id="writing-canopener-plugins">Writing CANopener plugins</h1>
+<p>A plugin is a folder with a <code>manifest.json</code> and a Python module. It runs inside CANopener with full access, so
+treat it as code: review it like any other change. <code>plugins/heartbeat-monitor/</code> is a complete example (about
+100 lines) that uses every part of the API.</p>
+<p>A plugin can add:</p>
+<ul>
+<li><strong>live frame consumers</strong>: an engine <em>tap</em> receives every frame of every channel without ever slowing the
+receive threads down;</li>
+<li><strong>REST routes</strong> under <code>/api/x/&lt;id&gt;/</code>;</li>
+<li><strong>MCP tools</strong> for Claude;</li>
+<li><strong>UI tabs</strong> (JavaScript, loaded by the page).</li>
+</ul>
+<h2 id="where-plugins-are-loaded-from">Where plugins are loaded from</h2>
+<p>At start-up, in this order (the first plugin with a given id wins):</p>
+<ol>
+<li><code>CANOPENER_PLUGIN_DIRS</code> (folders separated by <code>;</code> on Windows);</li>
+<li><code>plugins\</code> next to <code>canopener.exe</code> (from source: the repository's <code>plugins/</code>);</li>
+<li>the plugins shipped inside the release.</li>
+</ol>
+<p>There is no hot reload: restart CANopener after adding or changing a plugin. The <strong>Plugins</strong> tab lists what
+loaded and what failed (with the error). A broken plugin never stops CANopener.</p>
+<h2 id="folder-layout">Folder layout</h2>
+<pre><code>my-plugin/
+  manifest.json        {&quot;id&quot;: &quot;my-plugin&quot;, &quot;title&quot;: &quot;...&quot;, &quot;version&quot;: &quot;1.0&quot;, &quot;description&quot;: &quot;...&quot;, &quot;module&quot;: &quot;plugin.py&quot;}
+  plugin.py
+  ui/                  optional; every .js file here is loaded (alphabetical) and served at /ui/x/my-plugin/
+    my-plugin.js
+</code></pre>
+<p><code>id</code> is lowercase letters, digits and dashes. It appears in URLs, so never change it.</p>
+<h2 id="the-module">The module</h2>
+<pre><code class="language-python">from canopener.core.channel import F_EXT, F_TX, Tap
+from canopener.ext import Extension
+
+class MyPlugin(Extension):
+    title = &quot;My plugin&quot;
+
+    def setup(self, svc):                  # once, after the app service exists
+        self.tap = svc.engine.add_tap(Tap(maxlen=10_000, accept=lambda can_id, flags: can_id == 0x123))
+        ...                                # start your own thread that calls self.tap.get(timeout) / drain()
+
+    def routes(self, router, svc):         # FastAPI APIRouter, mounted at /api/x/&lt;id&gt;/
+        @router.get(&quot;/state&quot;)
+        def state():
+            return {...}
+
+    def mcp_tools(self, mcp, svc, run):
+        @mcp.tool()
+        def get_my_state() -&gt; dict:        # get_/list_/read_ names: read-only, may be allowlisted
+            &quot;&quot;&quot;One sentence for Claude.&quot;&quot;&quot;
+            return {...}
+
+    def shutdown(self, svc):               # stop your threads; svc.engine.remove_tap(self.tap)
+        ...
+
+EXTENSION = MyPlugin()
+</code></pre>
+<h3 id="frames">Frames</h3>
+<p>A frame is a tuple <code>(ts, can_id, flags, dlc, data)</code>: <code>ts</code> is wall-clock seconds (<code>time.time()</code> base), <code>data</code>
+is <code>bytes</code>, <code>flags</code> is a bit set from <code>canopener.core.channel</code>: <code>F_EXT</code> (29-bit id), <code>F_RTR</code>, <code>F_ERR</code> (error
+frame), <code>F_FD</code>, <code>F_BRS</code>, <code>F_ESI</code>, <code>F_TX</code> (sent by CANopener). An engine tap yields <code>(channel_index, frame)</code>.</p>
+<p><strong>The tap rules.</strong> <code>Tap(maxlen, include_tx=True, accept=None)</code>:</p>
+<ul>
+<li><code>accept(can_id, flags) -&gt; bool</code> runs on the receive thread for every frame. Keep it to a comparison or two.</li>
+<li>The receive thread never waits for you. When your tap is full, the oldest frame is dropped and
+<code>tap.dropped</code> counts it (the Statistics tab shows dropped plugin frames).</li>
+<li>Do the work on your own thread: <code>tap.get(timeout)</code> returns one frame or <code>None</code>; <code>tap.drain()</code> returns all
+waiting frames.</li>
+</ul>
+<h3 id="what-to-use-from-svc">What to use from <code>svc</code></h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>svc.engine.channels</code></td>
+<td><code>{index: Channel}</code>; <code>ch.stats()</code>, <code>ch.rows_snapshot()</code> (receive table), <code>ch.trace_tail(n)</code></td>
+</tr>
+<tr>
+<td><code>svc.engine.send(index, can_id, data, ext=None, fd=False, brs=False, rtr=False)</code></td>
+<td>send one frame (also shows in the trace)</td>
+</tr>
+<tr>
+<td><code>svc.engine.tx</code></td>
+<td>the transmit list (<code>add</code>, <code>update</code>, <code>send_once</code>, <code>stop_all</code>)</td>
+</tr>
+<tr>
+<td><code>svc.engine.start_recording(path)</code> / <code>stop_recording()</code></td>
+<td>recording</td>
+</tr>
+<tr>
+<td><code>svc.engine.event(text, level)</code></td>
+<td>a line in the app's event log (and a toast for <code>warn</code>)</td>
+</tr>
+<tr>
+<td><code>svc.nodes</code></td>
+<td>the CANopen node service: <code>scan(index)</code>, <code>plan_custom(index, steps, vars)</code> -&gt; <code>Plan</code>, <code>run_now(token)</code></td>
+</tr>
+<tr>
+<td><code>svc.signals</code></td>
+<td>decoded values: <code>publish(key, ts, value, unit=...)</code> from your own thread, <code>list()</code>, <code>history(key, seconds)</code>. Keys are <code>&lt;source&gt;/&lt;group&gt;/&lt;name&gt;</code>; use your plugin id as the source. Dashboards can plot anything you publish.</td>
+</tr>
+<tr>
+<td><code>svc.decode</code></td>
+<td>the DBC / CANopen / J1939 decoders (<code>svc.decode.config()</code>)</td>
+</tr>
+</tbody>
+</table>
+<p>Anything that writes to a CANopen node must go through a plan (<code>svc.nodes.plan_*</code>), so the user sees the
+frames first. Do not send node-changing frames from a plugin behind the user's back.</p>
+<h2 id="ui-scripts">UI scripts</h2>
+<p>Scripts in <code>ui/</code> run after the page has started and use <code>window.canopener</code> (also <code>CO</code>):</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>registerTab({id, title, order, render(el), onShow(el), onHide(el)})</code></td>
+<td>a top tab; <code>render</code> fills <code>el</code> once</td>
+</tr>
+<tr>
+<td><code>onProject(fn)</code></td>
+<td>a project was opened (reload what your tab shows)</td>
+</tr>
+<tr>
+<td><code>onFeed(fn)</code></td>
+<td>every 100 ms feed message: <code>{channels, rows, trace, events, ...}</code>; <code>{type: &quot;open&quot;/&quot;closed&quot;}</code> on (re)connect</td>
+</tr>
+<tr>
+<td><code>api(path, body?, method?)</code>, <code>tryApi(...)</code></td>
+<td>REST calls (<code>tryApi</code> shows errors as a toast)</td>
+</tr>
+<tr>
+<td><code>modal({title, body, buttons})</code>, <code>confirm(...)</code>, <code>toast(msg, kind)</code></td>
+<td>dialogs and messages</td>
+</tr>
+<tr>
+<td><code>esc</code>, <code>idText(id, flags)</code>, <code>typeText(flags)</code>, <code>fmtMs</code>, <code>fmtNum</code>, <code>chName(index)</code>, <code>F</code> (flags)</td>
+<td>helpers</td>
+</tr>
+<tr>
+<td><code>state.channels</code>, <code>state.signals</code>, <code>receiveRows</code>, <code>traceBuffer()</code></td>
+<td>live state (<code>state.signals[key]</code> = latest decoded value)</td>
+</tr>
+</tbody>
+</table>
+<p>Escape everything you put into HTML with <code>esc()</code>. Use the existing CSS classes (<code>page</code>, <code>card</code>, <code>tbl</code>, <code>btn</code>,
+<code>notice</code>, <code>badge</code>, <code>row</code>) and CSS variables, so the dark and light themes both work.</p>
+<h2 id="mcp-tool-rules">MCP tool rules</h2>
+<ul>
+<li>The name says whether it changes anything: <code>get_</code>, <code>list_</code>, <code>read_</code> (and <code>scan_</code>) only read. Any other verb transmits,
+writes or changes state and stays on approval, so the user sees each call.</li>
+<li>Never put a dry-run flag on a write tool (approval is per tool name): make a separate <code>get_..._preview</code> tool.</li>
+<li>Tool names are global across plugins: make them specific.</li>
+</ul>
+
+</article>
+<footer>Generated from PLUGINS.md by docs/build_guide.py. See also: <a href="user-guide.html">User guide</a>.</footer>
+</main>
+</div>
+<script>
+(function () {
+  var root = document.documentElement, btn = document.getElementById("theme");
+  function get() { try { return localStorage.getItem("guide.theme"); } catch (e) { return null; } }
+  function set(t) { try { localStorage.setItem("guide.theme", t); } catch (e) { /* file:// or private mode */ } }
+  var t = get(); if (t) root.dataset.theme = t;
+  btn.onclick = function () {
+    var dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+    root.dataset.theme = dark ? "light" : "dark"; set(root.dataset.theme);
+  };
+  // highlight the section in view in the contents
+  var links = {}, current = null;
+  document.querySelectorAll("nav.toc a[href^='#']").forEach(function (a) { links[a.getAttribute("href").slice(1)] = a; });
+  var heads = Array.prototype.filter.call(document.querySelectorAll("article h2[id], article h3[id]"), function (h) { return links[h.id]; });
+  function onScroll() {
+    var y = window.scrollY + 80, hit = null;
+    for (var i = 0; i < heads.length; i++) { if (heads[i].offsetTop <= y) hit = heads[i]; else break; }
+    if (hit !== current) {
+      if (current) links[current.id].classList.remove("on");
+      if (hit) links[hit.id].classList.add("on");
+      current = hit;
+    }
+  }
+  window.addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+})();
+</script>
+</body>
+</html>

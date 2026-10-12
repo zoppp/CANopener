@@ -1,0 +1,1312 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CANopener user guide</title>
+<style>
+:root {
+  --bg: #f6f7f9; --surface: #ffffff; --ink: #18202a; --muted: #5b6673; --rule: #d9dee4;
+  --accent: #1f6feb; --accent-soft: #e7f0fe; --code-bg: #eef1f4; --note-rule: #8fb4ee; --mat: #0d1117;
+  --font-body: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+  --font-mono: "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1318; --surface: #161b22; --ink: #e2e8ee; --muted: #9aa7b4; --rule: #2a323c;
+    --accent: #58a6ff; --accent-soft: #15243a; --code-bg: #1d242d; --note-rule: #2f5b94; --mat: #05080b;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1318; --surface: #161b22; --ink: #e2e8ee; --muted: #9aa7b4; --rule: #2a323c;
+  --accent: #58a6ff; --accent-soft: #15243a; --code-bg: #1d242d; --note-rule: #2f5b94; --mat: #05080b;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 16px; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.6 var(--font-body); }
+a { color: var(--accent); text-underline-offset: 2px; }
+.layout { display: grid; grid-template-columns: 270px minmax(0, 1fr); max-width: 1320px; margin: 0 auto; }
+nav.toc { position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; padding: 24px 16px 40px 20px;
+  border-right: 1px solid var(--rule); font-size: 14px; }
+nav.toc .brand { font-weight: 700; font-size: 17px; margin-bottom: 4px; }
+nav.toc .brand a { color: var(--ink); text-decoration: none; }
+nav.toc .sub { color: var(--muted); font-size: 13px; margin-bottom: 14px; }
+nav.toc ul { list-style: none; margin: 0; padding: 0; }
+nav.toc li { margin: 1px 0; }
+nav.toc ul ul { padding-left: 12px; border-left: 1px solid var(--rule); margin: 2px 0 6px 6px; }
+nav.toc a { display: block; padding: 3px 8px; border-radius: 6px; color: var(--ink); text-decoration: none; }
+nav.toc ul ul a { color: var(--muted); font-size: 13px; padding: 2px 8px; }
+nav.toc a:hover, nav.toc a.on { background: var(--accent-soft); color: var(--accent); }
+nav.toc .tools { margin-top: 16px; display: flex; gap: 8px; }
+button.theme { font: inherit; font-size: 13px; padding: 4px 10px; border: 1px solid var(--rule); border-radius: 6px;
+  background: var(--surface); color: var(--ink); cursor: pointer; }
+main { padding: 32px 48px 80px; min-width: 0; }
+article { max-width: 940px; }
+h1 { font-size: 34px; line-height: 1.2; margin: 0 0 12px; }
+h2 { font-size: 26px; line-height: 1.25; margin: 56px 0 12px; padding-top: 12px; border-top: 1px solid var(--rule); }
+h3 { font-size: 20px; margin: 32px 0 8px; }
+h4 { font-size: 17px; margin: 24px 0 6px; }
+h2 + h3 { margin-top: 16px; }
+p, ul, ol, table, pre, blockquote, figure { margin: 0 0 16px; }
+li { margin: 3px 0; }
+li > p { margin: 0 0 6px; }
+code { font-family: var(--font-mono); font-size: 0.88em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+pre { background: var(--code-bg); padding: 12px 14px; border-radius: 8px; overflow-x: auto; line-height: 1.45; }
+pre code { background: none; padding: 0; font-size: 13.5px; }
+table { border-collapse: collapse; width: 100%; font-size: 15px; display: block; overflow-x: auto; }
+th, td { text-align: left; vertical-align: top; padding: 7px 10px; border-bottom: 1px solid var(--rule); }
+th { background: var(--surface); font-weight: 600; border-bottom: 2px solid var(--rule); }
+blockquote { background: var(--accent-soft); border-left: 4px solid var(--note-rule); padding: 10px 14px; border-radius: 0 8px 8px 0; }
+blockquote p:last-child { margin-bottom: 0; }
+figure { background: var(--mat); padding: 10px; border-radius: 10px; }
+figure img { display: block; width: 100%; height: auto; border-radius: 4px; }
+figcaption { color: #9aa7b4; font-size: 13px; padding: 8px 4px 0; }
+img { max-width: 100%; }
+hr { border: 0; border-top: 1px solid var(--rule); margin: 32px 0; }
+footer { color: var(--muted); font-size: 13px; margin-top: 64px; padding-top: 16px; border-top: 1px solid var(--rule); }
+@media (max-width: 900px) {
+  .layout { display: block; }
+  nav.toc { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--rule); padding: 16px; }
+  nav.toc ul ul { display: none; }
+  main { padding: 20px 16px 60px; }
+  h1 { font-size: 28px; }
+}
+@media print {
+  nav.toc { display: none; }
+  .layout { display: block; }
+  main { padding: 0; }
+  figure { background: none; padding: 0; }
+  h2 { break-after: avoid; }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+<nav class="toc" aria-label="Contents">
+  <div class="brand"><a href="#top">CANopener user guide</a></div>
+  <div class="sub">CANopener documentation</div>
+  <ul><li><a href="#getting-started">Getting started</a><ul><li><a href="#download-and-start">Download and start</a></li><li><a href="#your-first-connection">Your first connection</a></li><li><a href="#try-it-without-hardware">Try it without hardware</a></li><li><a href="#closing">Closing</a></li></ul></li><li><a href="#connecting-adapters">Connecting adapters</a><ul><li><a href="#adapters">Adapters</a></li><li><a href="#listen-only">Listen-only</a></li><li><a href="#can-fd">CAN FD</a></li><li><a href="#several-channels">Several channels</a></li></ul></li><li><a href="#the-screen">The screen</a></li><li><a href="#receive--transmit">Receive / Transmit</a><ul><li><a href="#receive-list">Receive list</a></li><li><a href="#transmit-list">Transmit list</a></li></ul></li><li><a href="#trace">Trace</a></li><li><a href="#record--replay">Record &amp; Replay</a><ul><li><a href="#record">Record</a></li><li><a href="#recordings">Recordings</a></li><li><a href="#open-a-recording-offline">Open a recording offline</a></li><li><a href="#replay">Replay</a></li></ul></li><li><a href="#statistics">Statistics</a></li><li><a href="#nodes-canopen">Nodes (CANopen)</a><ul><li><a href="#scan">Scan</a></li><li><a href="#recipes">Recipes</a></li><li><a href="#set-id">Set ID</a></li><li><a href="#bit-rate">Bit rate</a></li><li><a href="#custom-mode-for-unknown-devices">Custom mode for unknown devices</a></li></ul></li><li><a href="#decode-dbc-canopen-j1939">Decode: DBC, CANopen, J1939</a><ul><li><a href="#dbc">DBC</a></li><li><a href="#canopen">CANopen</a></li><li><a href="#j1939">J1939</a></li><li><a href="#signal-names">Signal names</a></li></ul></li><li><a href="#dashboards">Dashboards</a><ul><li><a href="#edit-the-layout">Edit the layout</a></li><li><a href="#quick-signals-without-a-dbc">Quick signals (without a DBC)</a></li></ul></li><li><a href="#projects-and-settings">Projects and settings</a></li><li><a href="#task-walkthroughs">Task walkthroughs</a><ul><li><a href="#watch-a-bus-and-find-which-id-floods-it">Watch a bus and find which ID floods it</a></li><li><a href="#send-a-cyclic-frame">Send a cyclic frame</a></li><li><a href="#record-a-fault-and-send-the-file-to-a-colleague">Record a fault and send the file to a colleague</a></li><li><a href="#open-a-recording-offline-1">Open a recording offline</a></li><li><a href="#give-a-canopen-node-a-new-id">Give a CANopen node a new ID</a></li><li><a href="#change-bit-rates">Change bit rates</a></li><li><a href="#commission-an-unknown-device-and-save-a-recipe">Commission an unknown device and save a recipe</a></li><li><a href="#decode-with-a-dbc-and-transmit-by-signal-value">Decode with a DBC and transmit by signal value</a></li><li><a href="#canopen-eds-pdos-sdo-browser-nmt-emcy">CANopen EDS: PDOs, SDO browser, NMT, EMCY</a></li><li><a href="#j1939-ecus-dm1-transport-messages">J1939: ECUs, DM1, transport messages</a></li><li><a href="#build-a-dashboard">Build a dashboard</a></li><li><a href="#save-and-reuse-a-setup-with-projects">Save and reuse a setup with projects</a></li></ul></li><li><a href="#claude-mcp">Claude (MCP)</a></li><li><a href="#plugins">Plugins</a></li><li><a href="#command-line">Command line</a></li><li><a href="#files-and-folders">Files and folders</a></li><li><a href="#troubleshooting">Troubleshooting</a></li><li><a href="#faq">FAQ</a></li></ul>
+  <div class="tools"><button class="theme" id="theme" type="button">Light / dark</button></div>
+</nav>
+<main id="top">
+<article>
+<h1 id="canopener-user-guide">CANopener user guide</h1>
+<p>CANopener is an open-source CAN engineering toolbox for Windows (and, from source, Linux). It does what
+PCAN-View does (receive list, transmit list, trace, record and replay, bus statistics) for many adapters, and
+adds CANopen node commissioning, DBC / CANopen / J1939 decoding, dashboards, plugins and an MCP endpoint, so
+Claude can read the bus and, with your approval, act on it.</p>
+<p>Everything in this guide can be tried without hardware: CANopener has a built-in simulator with three made-up
+CANopen devices and some J1939 traffic. All screenshots were taken with it (plus a DBC file, an EDS file and a
+few transmit entries).</p>
+<figure><a href="img/receive.png"><img src="img/receive.png" alt="The Receive / Transmit tab with the simulator connected" loading="lazy" /></a><figcaption>The Receive / Transmit tab with the simulator connected</figcaption></figure>
+<h2 id="getting-started">Getting started</h2>
+<h3 id="download-and-start">Download and start</h3>
+<ol>
+<li>Download <code>canopener-&lt;version&gt;-win64.zip</code> from the project's Releases page.</li>
+<li>Unzip the whole folder somewhere you can write to, for example Documents or the Desktop. Not into
+<code>Program Files</code>: CANopener keeps its recordings, logs and settings next to the exe.</li>
+<li>Double-click <code>canopener.exe</code>. The app opens in its own window.</li>
+</ol>
+<p>The first time, Windows SmartScreen may say &quot;Windows protected your PC&quot;, because the exe is not signed. Click
+<strong>More info</strong>, then <strong>Run anyway</strong>. This happens once per downloaded version.</p>
+<p>CANopener runs as a small local server with the window on top. Double-clicking <code>canopener.exe</code> again opens a
+second window onto the same running CANopener, so both windows show the same bus. There is only ever one
+CANopener per PC and port.</p>
+<p>The window needs the Microsoft Edge WebView2 runtime, which Windows 10 and 11 already have. Without it,
+CANopener opens in your web browser instead.</p>
+<h3 id="your-first-connection">Your first connection</h3>
+<ol>
+<li>Click <strong>+ Connect</strong> in the top bar (or press <strong>Ctrl+K</strong>).</li>
+<li>Pick your adapter from <strong>Detected adapters</strong>. This fills in the interface and channel.</li>
+<li>Choose the <strong>Bit rate</strong> of your bus. Tick <strong>Listen-only</strong> if you only want to watch a running machine.</li>
+<li>Click <strong>Connect</strong>.</li>
+</ol>
+<p>The adapter shows as a chip (<strong>CAN1</strong>) in the top bar, and frames start to appear in the receive list. The
+status bar at the bottom shows the bus load and frames per second.</p>
+<h3 id="try-it-without-hardware">Try it without hardware</h3>
+<ol>
+<li>Click <strong>+ Connect</strong>.</li>
+<li>Choose the interface <strong>Virtual (no hardware)</strong>.</li>
+<li>Leave <strong>Start simulated devices on this virtual bus</strong> ticked.</li>
+<li>Click <strong>Connect</strong>.</li>
+</ol>
+<p>The simulator puts these made-up devices on the virtual bus:</p>
+<table>
+<thead>
+<tr>
+<th>Node</th>
+<th>Name</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>5</td>
+<td>Demo device A (SDO)</td>
+<td>Answers SDO, sends heartbeats and a TPDO. Its node id is set with object 0x2100:00 and applied by a store (0x1010:01) plus an NMT reset. Its bit-rate recipe writes 0x2101:00; the simulator accepts it but keeps running (a virtual bus has no bit rate). CANopener has a recipe for it.</td>
+</tr>
+<tr>
+<td>10</td>
+<td>Demo device B (SDO, power cycle)</td>
+<td>Like A, node id in 0x2110:01, but the new id only takes effect after a power cycle. The simulator cannot be switched off: it applies the stored id at the next NMT reset instead (Decode &gt; CANopen &gt; <strong>Reset</strong>). CANopener has a recipe for it.</td>
+</tr>
+<tr>
+<td>20</td>
+<td>Demo LSS device</td>
+<td>Changes its node id and bit rate over LSS (CiA 305).</td>
+</tr>
+</tbody>
+</table>
+<p>There is also a fast free-running frame (0x0CF, 100 times a second), J1939 traffic (two ECUs claiming addresses,
+DM1 trouble codes from both, one of them by BAM transport protocol every 30 s) and, every minute, an emergency
+message from nodes 5 and 10. The
+devices really change their node id when you commission them, so you can practise every node workflow safely.</p>
+<p>The virtual bus exists only inside CANopener. It is not visible to other programs.</p>
+<h3 id="closing">Closing</h3>
+<p>Closing the first CANopener window stops every cyclic transmit and a running replay, then finishes a running
+recording, saves the settings and closes the adapters: nothing keeps sending after CANopener has closed. A second
+window (started while CANopener runs) only looks at the same CANopener; it closes when the first one does.</p>
+<p>Without the WebView2 runtime CANopener opens in your browser instead; closing the browser does not stop it. Click
+<strong>OK</strong> in the &quot;CANopener is running in your browser&quot; message to stop it.</p>
+<h2 id="connecting-adapters">Connecting adapters</h2>
+<figure><a href="img/connect.png"><img src="img/connect.png" alt="The Connect dialog" loading="lazy" /></a><figcaption>The Connect dialog</figcaption></figure>
+<p>The <strong>Connect an adapter</strong> dialog:</p>
+<ul>
+<li><strong>Detected adapters</strong> lists what is plugged in right now. Picking an entry fills in the interface and
+channel. <strong>Refresh</strong> searches again (for example after plugging an adapter in).</li>
+<li><strong>Interface</strong>: the adapter type. Choose it by hand if your adapter is not detected. The line under the
+dialog says what that interface needs (for example a driver).</li>
+<li><strong>Channel</strong>: the adapter's channel. Leave it empty for the default, shown as the placeholder.</li>
+<li><strong>Bit rate</strong>: the nominal bit rate, 10 kbit/s to 1 Mbit/s. A rate the adapter's driver cannot do is refused
+with a message that lists the rates it can do. It is never silently replaced by another rate.</li>
+<li><strong>CAN FD</strong> and <strong>FD data bit rate</strong>: only for interfaces that support CAN FD.</li>
+<li><strong>Listen-only</strong>: the adapter never acknowledges or transmits frames. See below.</li>
+<li><strong>Start simulated devices on this virtual bus</strong>: only for the Virtual interface.</li>
+</ul>
+<p>The dialog shows which channel the adapter will open as (<strong>CAN1</strong>, <strong>CAN2</strong>, ...). Your choices are remembered
+and filled in next time.</p>
+<h3 id="adapters">Adapters</h3>
+<table>
+<thead>
+<tr>
+<th>Adapter</th>
+<th>Interface</th>
+<th>Channel</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>PEAK PCAN-USB</td>
+<td>PEAK PCAN-USB</td>
+<td><code>PCAN_USBBUS1</code>, <code>PCAN_USBBUS2</code>, ...</td>
+<td>Needs the PEAK driver (installing PCAN-View installs it). Listen-only and CAN FD.</td>
+</tr>
+<tr>
+<td>Kvaser</td>
+<td>Kvaser</td>
+<td><code>0</code>, <code>1</code>, ...</td>
+<td>Needs the Kvaser driver. Listen-only (silent mode) and CAN FD. The &quot;Kvaser Virtual CAN Driver&quot; channels are a loopback pair for testing. The Statistics tab also shows the adapter's own bus load figure.</td>
+</tr>
+<tr>
+<td>CANable with slcan firmware</td>
+<td>CANable / slcan (COM port)</td>
+<td>the COM port, for example <code>COM5</code></td>
+<td>No driver needed. Listen-only. CAN FD on a CANable 2, with a data bit rate of 2 or 5 Mbit/s only. Clones that keep the chip maker's USB id are detected as &quot;STM32 virtual COM port&quot;.</td>
+</tr>
+<tr>
+<td>CANable with candleLight firmware</td>
+<td>CANable / candleLight (USB)</td>
+<td><code>0</code></td>
+<td>A USB device; libusb is included. If it is not detected, bind the WinUSB driver to it once with Zadig. Classic CAN only, no listen-only.</td>
+</tr>
+<tr>
+<td>Vector</td>
+<td>Vector</td>
+<td>the driver's global channel index, <code>0</code>, <code>1</code>, ...</td>
+<td>Needs the Vector driver library. Nothing has to be set up in the Vector hardware configuration first. Listen-only and CAN FD.</td>
+</tr>
+<tr>
+<td>IXXAT</td>
+<td>IXXAT</td>
+<td><code>0</code>, <code>1</code>, ...</td>
+<td>Needs the IXXAT VCI driver. CAN FD; no listen-only.</td>
+</tr>
+<tr>
+<td>Linux SocketCAN</td>
+<td>Linux SocketCAN</td>
+<td><code>can0</code>, ...</td>
+<td>Linux only (from source). Set the bit rate in the operating system (<code>ip link</code>); the bit rate field is disabled.</td>
+</tr>
+<tr>
+<td>Virtual</td>
+<td>Virtual (no hardware)</td>
+<td>any name, default <code>canopener</code></td>
+<td>A bus inside CANopener for trying things and for tests.</td>
+</tr>
+</tbody>
+</table>
+<p>Which CANable firmware do you have? If the board shows up in Device Manager as a COM port, it runs slcan. If it
+shows up as a USB device (or as an unknown device), it runs candleLight. Both work; slcan needs no driver
+setup, candleLight is faster on a busy bus.</p>
+<p>The <strong>Bit rate</strong> list offers 10, 20, 50, 83.3, 100, 125, 250, 500, 800 and 1000 kbit/s. Not every driver can run
+every one of them: slcan has no 800 kbit/s and IXXAT no 83.3 kbit/s, and CANopener says so when you connect.
+PEAK, Kvaser, Vector and candleLight run every listed rate.</p>
+<h3 id="listen-only">Listen-only</h3>
+<p>A listen-only adapter never sends anything onto the bus, not even the acknowledge bit. Use it to watch a live
+machine without any chance of disturbing it.</p>
+<p>On a listen-only channel nothing is transmitted: sending and node changes are refused, cyclic entries stop, a
+replay onto it sends nothing (each frame counts as a send error), and a node scan only listens.</p>
+<p>A listen-only adapter that is the only other device on the bus sees nothing useful: a frame nobody
+acknowledges is repeated by its sender and shows as errors. At least one other node must acknowledge.</p>
+<h3 id="can-fd">CAN FD</h3>
+<p>Tick <strong>CAN FD</strong> and choose the <strong>FD data bit rate</strong>. The nominal bit rate stays the arbitration rate. Received
+FD frames show as type <strong>FD</strong> (or <strong>FD BRS</strong> with bit rate switching) in the receive list and the trace. To
+send FD frames, tick <strong>CAN FD</strong> (and <strong>Bit rate switch</strong> if wanted) in the transmit entry.</p>
+<h3 id="several-channels">Several channels</h3>
+<p>Click <strong>+ Connect</strong> again to open another adapter, or another channel of the same adapter. Each opens as the
+next free channel (CAN2, CAN3, ...) and gets its own chip and its own part of the status bar.</p>
+<ul>
+<li>The receive list shows a <strong>Ch</strong> column as soon as more than one channel is connected; the trace always has
+one. Both have a channel selector. Statistics shows one card per channel.</li>
+<li>A transmit entry has a <strong>Channel</strong>.</li>
+<li>A recording records every connected channel.</li>
+</ul>
+<p>The <strong>×</strong> on a chip disconnects that channel.</p>
+<h2 id="the-screen">The screen</h2>
+<ul>
+<li><strong>Top bar</strong>: the CANopener logo; one chip per channel (state dot, name, adapter, channel and bit rate, <code>FD</code>
+and <code>LO</code> for listen-only; hover a red chip for its error); <strong>+ Connect</strong>; a red <strong>REC</strong> indicator while
+recording; <strong>Project</strong>; the light / dark switch (◑); <strong>?</strong> for the About box.</li>
+<li><strong>Tabs</strong>: Receive / Transmit, Trace, Record &amp; Replay, Statistics, Decode, Dashboards, Nodes (CANopen), the
+tabs of plugins (the shipped example adds <strong>Heartbeats</strong>), and Plugins.</li>
+<li><strong>Status bar</strong>: per channel the bus load bar and percentage, frames per second, the bus state when it is not
+ACTIVE (warning, passive, bus off), and error counters (error frames / receive errors / send errors). <strong>Log</strong>
+opens the event log; its badge counts new events.</li>
+</ul>
+<p>The <strong>event log</strong> lists what happened: connects and disconnects, adapter errors, recordings, node jobs.
+Warnings and errors also show briefly as a message in the corner.</p>
+<p>The <strong>About</strong> box (<strong>?</strong>) shows the version, the app folder, the MCP address for Claude, how many plugins loaded and
+a <strong>User guide</strong> button that opens this guide.</p>
+<figure><a href="img/about.png"><img src="img/about.png" alt="The About box with the User guide button" loading="lazy" /></a><figcaption>The About box with the User guide button</figcaption></figure>
+<h2 id="receive--transmit">Receive / Transmit</h2>
+<p>The main tab, as in PCAN-View: the receive list on top, the transmit list below. Drag the bar between them to
+resize.</p>
+<figure><a href="img/receive.png"><img src="img/receive.png" alt="Receive / Transmit" loading="lazy" /></a><figcaption>Receive / Transmit</figcaption></figure>
+<h3 id="receive-list">Receive list</h3>
+<p>One row per CAN ID (per channel):</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Ch</td>
+<td>The channel (only with several channels).</td>
+</tr>
+<tr>
+<td>ID</td>
+<td>Hex; 3 digits for 11-bit, 8 digits for 29-bit IDs. <code>Tx</code> marks frames CANopener sent.</td>
+</tr>
+<tr>
+<td>Type</td>
+<td>Std, Ext, FD, FD BRS, RTR, Error.</td>
+</tr>
+<tr>
+<td>DLC</td>
+<td>Data length.</td>
+</tr>
+<tr>
+<td>Data</td>
+<td>The last data. Bytes that changed in the last 1.5 s are highlighted.</td>
+</tr>
+<tr>
+<td>Cycle ms</td>
+<td>The last interval between two frames of this ID.</td>
+</tr>
+<tr>
+<td>Count</td>
+<td>Frames received.</td>
+</tr>
+<tr>
+<td>Min ms / Max ms</td>
+<td>The shortest and longest interval seen.</td>
+</tr>
+<tr>
+<td>Decoded</td>
+<td>The decoded content, as soon as a decoder knows this ID (DBC, CANopen EDS, heartbeats, EMCY, J1939).</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>Click <strong>ID</strong>, <strong>DLC</strong>, <strong>Cycle ms</strong> or <strong>Count</strong> in the header to sort; click again to reverse.</li>
+<li><strong>ID filter</strong> takes hex IDs and ranges, separated by commas: <code>100-1FF, 7E5</code>.</li>
+<li>The channel selector shows <strong>All channels</strong> or one.</li>
+<li><strong>show Tx</strong> adds rows for frames CANopener itself sent.</li>
+<li><strong>Freeze</strong> stops the view from updating (the button then says <strong>Frozen</strong>). Traffic keeps being counted.</li>
+<li><strong>Clear</strong> resets the rows and counters of the selected channel (or of all channels).</li>
+<li><strong>To transmit</strong> copies the selected row into a new transmit entry, with its data, flags and cycle time. A
+double-click on a row does the same.</li>
+</ul>
+<h3 id="transmit-list">Transmit list</h3>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>On</td>
+<td>Starts or stops a cyclic entry. Disabled for an entry without a cycle time.</td>
+</tr>
+<tr>
+<td>ID, Type, DLC, Data</td>
+<td>The frame.</td>
+</tr>
+<tr>
+<td>Cycle ms</td>
+<td>The cycle time, or <code>manual</code>.</td>
+</tr>
+<tr>
+<td>Count</td>
+<td>Frames sent.</td>
+</tr>
+<tr>
+<td>Comment</td>
+<td>Your note. An <strong>error</strong> badge shows if sending failed (hover it for the reason).</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>+ New</strong> adds an entry. <strong>Stop all</strong> stops every cyclic entry.</li>
+<li><strong>Send</strong> sends the entry once. Or click a row to select it and press <strong>Space</strong>.</li>
+<li><strong>Edit</strong> (or a double-click on the row) changes it. <strong>×</strong> deletes it.</li>
+</ul>
+<p>The transmit dialog:</p>
+<figure><a href="img/tx-dbc.png"><img src="img/tx-dbc.png" alt="Editing a transmit entry in DBC message mode" loading="lazy" /></a><figcaption>Editing a transmit entry in DBC message mode</figcaption></figure>
+<ul>
+<li><strong>ID (hex)</strong>, <strong>Channel</strong>, <strong>Cycle time ms (0 = manual)</strong>.</li>
+<li><strong>Extended (29-bit)</strong>, <strong>CAN FD</strong>, <strong>Bit rate switch</strong> (FD only), <strong>Remote request</strong> (then a <strong>Remote request
+DLC</strong> field appears).</li>
+<li><strong>Data from</strong>: appears once a DBC file is loaded (see <a href="#decode-dbc-canopen-j1939">Decode</a>). Choose <strong>raw
+bytes</strong> to type the data yourself, or a <strong>DBC message</strong> to type signal values: one field per signal, with a
+list for signals that have named values. The ID and data fields are then not used: when you click <strong>Add</strong>
+(or <strong>Save</strong>), CANopener encodes the bytes with the DBC and the transmit row shows them.</li>
+<li><strong>Data (hex bytes)</strong>: for example <code>11 22 33 44</code>.</li>
+<li><strong>Comment</strong>.</li>
+</ul>
+<p>The transmit list is saved automatically. After a restart the entries are back, but cyclic entries never start
+by themselves: tick <strong>On</strong> again.</p>
+<h2 id="trace">Trace</h2>
+<p>Every frame in time order, received and sent, from all channels. The view scrolls with the newest frames;
+scroll up to look at older ones (a <strong>Jump to latest</strong> button brings you back).</p>
+<figure><a href="img/trace.png"><img src="img/trace.png" alt="The trace with a filter: the fast frames 0CF and 18FEF100 excluded" loading="lazy" /></a><figcaption>The trace with a filter: the fast frames 0CF and 18FEF100 excluded</figcaption></figure>
+<ul>
+<li>
+<p><strong>Pause</strong> stops the live view (<strong>Paused - resume</strong> continues). Recording and counters keep running. A
+<code>paused</code> row marks the gap.</p>
+</li>
+<li>
+<p><strong>Clear</strong> empties the view.</p>
+</li>
+<li>
+<p><strong>Filter</strong>:</p>
+<ul>
+<li>the channel selector;</li>
+<li><strong>IDs</strong>: hex IDs and ranges, <code>100-1FF, 7E5</code>; tick <strong>exclude</strong> to hide these IDs instead of showing only
+them;</li>
+<li><strong>Rx + Tx</strong>, <strong>Rx only</strong> or <strong>Tx only</strong>;</li>
+<li><strong>data contains (hex)</strong>: frames whose data contains these bytes, for example <code>2F 00 21</code>.</li>
+</ul>
+<p>The filter runs in the server, before the frames are sent to the window, so a rare ID is never lost among
+thousands of others.</p>
+</li>
+<li>
+<p><strong>Time</strong>: <strong>Time (s)</strong> since the first frame shown, <strong>Delta (ms)</strong> to the previous frame shown, or <strong>Clock</strong>
+(wall-clock time).</p>
+</li>
+<li>
+<p><strong>Save...</strong> writes everything the trace buffer holds to a file in the recordings folder: all channels,
+without the filter, about the last 260 000 frames per channel. Formats <code>.trc</code>, <code>.asc</code>, <code>.blf</code>, <code>.log</code> and
+<code>.csv</code>; the name is automatic unless you give one.</p>
+</li>
+</ul>
+<p>The info line on the right says how many frames are shown. The live view shows up to 25 000 frames per second.
+If more arrive, it says how many were not shown live; they are still in the buffer, in a save and in any
+recording. Use <strong>Record</strong> for long captures.</p>
+<h2 id="record--replay">Record &amp; Replay</h2>
+<figure><a href="img/record.png"><img src="img/record.png" alt="Recording to fault-hunt.trc" loading="lazy" /></a><figcaption>Recording to fault-hunt.trc</figcaption></figure>
+<h3 id="record">Record</h3>
+<ol>
+<li>Optionally type a <strong>File name</strong> (default: the date and time).</li>
+<li>Choose the <strong>Format</strong>.</li>
+<li>Click <strong>Start recording</strong>.</li>
+</ol>
+<p>Every connected channel is recorded, received and sent frames, by a writer thread of its own, so a busy bus
+does not drop frames. The card shows the file, the frames written, the duration and the size; the top bar
+shows <strong>REC</strong>. <strong>Stop</strong> finishes the file.</p>
+<p>An existing file is never overwritten: <code>-1</code>, <code>-2</code> ... is added to the name instead.</p>
+<table>
+<thead>
+<tr>
+<th>Format</th>
+<th>Use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>.trc</code></td>
+<td>PCAN-View trace (version 2.1: CAN FD, Rx/Tx, several buses).</td>
+</tr>
+<tr>
+<td><code>.blf</code></td>
+<td>Vector binary logging format (CANalyzer, CANoe, ...).</td>
+</tr>
+<tr>
+<td><code>.asc</code></td>
+<td>Vector ASCII.</td>
+</tr>
+<tr>
+<td><code>.log</code></td>
+<td>Linux candump.</td>
+</tr>
+<tr>
+<td><code>.csv</code></td>
+<td>Spreadsheets.</td>
+</tr>
+<tr>
+<td><code>.canbin</code></td>
+<td>A compact binary format for loggers on a PLC (classic CAN).</td>
+</tr>
+</tbody>
+</table>
+<h3 id="recordings">Recordings</h3>
+<p>The <strong>Recordings</strong> card lists the files in the recordings folder (its path is shown next to the title), newest
+first:</p>
+<ul>
+<li><strong>Open</strong> loads the file for offline viewing (see below).</li>
+<li><strong>Replay...</strong> sends it onto a bus.</li>
+<li><strong>Download</strong> saves a copy where you choose.</li>
+<li><strong>Import file...</strong> copies a <code>.trc</code>, <code>.asc</code>, <code>.blf</code>, <code>.log</code>, <code>.csv</code> or <code>.canbin</code> file from elsewhere into the
+recordings folder. <strong>Refresh</strong> reads the folder again.</li>
+</ul>
+<h3 id="open-a-recording-offline">Open a recording offline</h3>
+<p><strong>Open</strong> loads the file as a <em>file channel</em>: it shows as a chip named after the file, with the word <code>file</code>.</p>
+<figure><a href="img/file-view.png"><img src="img/file-view.png" alt="A recording opened offline as a file channel" loading="lazy" /></a><figcaption>A recording opened offline as a file channel</figcaption></figure>
+<ul>
+<li>The receive list shows its IDs with the real cycle times from the recorded timestamps (pick the file in the
+channel selector to see only it).</li>
+<li>The trace shows its frames, from the start.</li>
+<li>The status bar shows how many frames it holds.</li>
+</ul>
+<p>A file channel never transmits and needs no adapter. Close it with the <strong>×</strong> on its chip.</p>
+<h3 id="replay">Replay</h3>
+<figure><a href="img/replay.png"><img src="img/replay.png" alt="The replay dialog" loading="lazy" /></a><figcaption>The replay dialog</figcaption></figure>
+<p><strong>Replay...</strong> asks:</p>
+<ul>
+<li><strong>Bus 1 of the file onto</strong>: the connected channel to send on;</li>
+<li><strong>Speed</strong>: 0.5x, 1x (recorded timing), 2x or 10x;</li>
+<li><strong>Frames</strong>: all, recorded Rx only, or recorded Tx only;</li>
+<li><strong>Loop</strong>: start over at the end.</li>
+</ul>
+<p>Replay transmits every recorded frame onto the bus. Make sure that is safe for the machine. The Replay card
+shows the progress, with <strong>Pause</strong> / <strong>Resume</strong> and <strong>Stop</strong>.</p>
+<h2 id="statistics">Statistics</h2>
+<figure><a href="img/stats.png"><img src="img/stats.png" alt="Statistics" loading="lazy" /></a><figcaption>Statistics</figcaption></figure>
+<p>One card per channel:</p>
+<ul>
+<li><strong>State</strong>: open, error or file, and the bus state (ACTIVE, warning, passive, bus off).</li>
+<li><strong>Bus load</strong>: now and peak, estimated from the frames (with Kvaser also the adapter's own figure).</li>
+<li><strong>Frames/s</strong>: now and peak.</li>
+<li><strong>Received</strong>, <strong>Transmitted</strong>.</li>
+<li><strong>Error frames</strong> (and per second), <strong>Receive / send errors</strong>, adapter overruns.</li>
+<li><strong>Distinct IDs</strong>, and how long the channel has been <strong>Connected</strong>.</li>
+</ul>
+<p>The chart shows bus load and frame rate over the last 10 minutes.</p>
+<p><strong>Busiest IDs</strong> ranks the periodic IDs by their average rate over the whole time they were seen: frames per
+second, average cycle, minimum and maximum interval, count. IDs seen fewer than 5 times (single SDO
+transfers, NMT commands) are left out.</p>
+<h2 id="nodes-canopen">Nodes (CANopen)</h2>
+<p>This tab finds the CANopen nodes on a channel and changes their node ID or bit rate. Every change is a <em>plan</em>:
+you first see every frame that will be sent, tick a box, and only then is anything sent. Every scan, plan and
+run is written to <code>logs\nodes.log</code>.</p>
+<figure><a href="img/nodes.png"><img src="img/nodes.png" alt="Nodes after a scan" loading="lazy" /></a><figcaption>Nodes after a scan</figcaption></figure>
+<h3 id="scan">Scan</h3>
+<p>Choose the <strong>Channel</strong>, the <strong>listen</strong> time (default 2.5 s) and click <strong>Scan</strong>.</p>
+<ol>
+<li>CANopener listens: heartbeats, boot-ups and PDOs hint at node ids.</li>
+<li>It pings every node id it has not already seen (heartbeat, boot-up) with an SDO read of 0x1000 (device
+type).</li>
+<li>For each node found it reads the identity (0x1018: vendor id, product code, revision, serial number) and
+the device name (0x1008).</li>
+</ol>
+<p>The table shows each node with its name, identity, how it was seen (heartbeat, pdo, sdo), its NMT state, and
+the <strong>recipe</strong> CANopener will use to change its node ID and bit rate. Below the table: how many raw 11-bit
+and extended IDs were seen, and PDO-range traffic that has no CANopen node behind it. <strong>raw ids</strong> lists them
+all.</p>
+<p>The scan only reads: it changes nothing on any node. On a listen-only channel it only listens. The job log
+under the table shows each step; <strong>Stop</strong> cancels a running job. <strong>Session log...</strong> shows the end of
+<code>logs\nodes.log</code>.</p>
+<h3 id="recipes">Recipes</h3>
+<p>A recipe says how a device changes its node ID (and bit rate). CANopener picks it by the vendor id from 0x1018
+(and the product code, when a recipe names one):</p>
+<ul>
+<li><strong>LSS</strong> (CiA 305) is the default for every device without a recipe;</li>
+<li><strong>SDO recipes</strong> write the device's own node-id object, store, and reset;</li>
+<li><strong>read-only</strong> devices cannot be changed (<strong>Set ID...</strong> is disabled).</li>
+</ul>
+<p>CANopener ships no recipes for real devices, only those of the simulator's demo devices. For your devices,
+build the sequence in the <a href="#custom-mode-for-unknown-devices">custom mode</a> and <strong>Save as recipe</strong>. From then on
+<strong>Set ID...</strong> and <strong>Bit rate...</strong> use it automatically.</p>
+<h3 id="set-id">Set ID</h3>
+<p><strong>Set ID...</strong> on a node row asks for:</p>
+<ul>
+<li><strong>New node ID (1..127)</strong>;</li>
+<li><strong>Method</strong>: automatic (by vendor id), LSS, or a named recipe;</li>
+<li><strong>Verify timeout s</strong>: how long to wait for the node to answer at its new id.</li>
+</ul>
+<p><strong>Preview</strong> then shows the plan:</p>
+<figure><a href="img/nodes-preview.png"><img src="img/nodes-preview.png" alt="Set-ID preview of the demo LSS device: every frame of the LSS sequence" loading="lazy" /></a><figcaption>Set-ID preview of the demo LSS device: every frame of the LSS sequence</figcaption></figure>
+<ul>
+<li>the channel, the recipe and where it comes from, the number of frames;</li>
+<li>warnings: a <strong>conflict</strong> when the new id's COB-IDs (heartbeat, SDO, PDOs) are already used by any ID seen on
+the bus, not only by other CANopen nodes; that a power cycle is needed;</li>
+<li>every step with the <strong>exact frames</strong> that will be sent, including the conditional ones (the SDO abort after
+a timeout, the polls of the new id), and the reply each step expects.</li>
+</ul>
+<p>Steps marked <strong>always</strong> also run after a failure (cleanup, for example LSS back to waiting). Steps marked
+<strong>optional</strong> only warn when they fail.</p>
+<p>Nothing is sent until you tick <strong>I checked the frames above and want to send them</strong> and click <strong>Run</strong>. The run
+shows live in the job log, the result shows under it (verified at the new id, or &quot;power cycle required&quot;), and
+the whole run is appended to <code>logs\nodes.log</code>.</p>
+<p>A scan is needed first: the conflict check and the recipe come from it.</p>
+<h3 id="bit-rate">Bit rate</h3>
+<p><strong>Bit rate...</strong> on a node row changes that node's bit rate with its recipe (SDO or LSS). <strong>Bit rate of all LSS
+devices...</strong> switches every LSS device on the bus at once. The dialog asks for:</p>
+<ul>
+<li><strong>New bit rate</strong> (10 to 1000 kbit/s);</li>
+<li><strong>LSS switch delay ms</strong>;</li>
+<li><strong>Verify timeout s</strong>.</li>
+</ul>
+<p>The preview shows the frames as for Set ID. The sequence is configure, store, then activate. After the switch
+the adapter reopens at the new rate and waits for traffic. Nodes that did not switch stay at the old rate and
+are no longer heard; the preview warns about this.</p>
+<p>The button is disabled for a node whose recipe has no bit-rate method (use the custom mode).</p>
+<h3 id="custom-mode-for-unknown-devices">Custom mode for unknown devices</h3>
+<p>The <strong>Custom sequence</strong> card builds your own steps, for devices without a recipe, or for anything else you
+want to send as a checked, logged sequence.</p>
+<figure><a href="img/nodes-custom.png"><img src="img/nodes-custom.png" alt="The custom sequence editor with the &quot;SDO: write node id, store, reset&quot; template" loading="lazy" /></a><figcaption>The custom sequence editor with the &quot;SDO: write node id, store, reset&quot; template</figcaption></figure>
+<ul>
+<li><strong>Start from a template...</strong> loads a starting point: SDO node id + store + reset; LSS node id for the only
+device on the bus; LSS bit rate of every LSS device; read identity and name; NMT start all; NMT all to
+pre-operational.</li>
+<li><strong>+ step</strong> adds a step; the arrows move it, <strong>×</strong> removes it; <strong>Clear</strong> removes all.</li>
+<li><strong>Variables</strong> (<code>$OLD_ID</code>, <code>$NEW_ID</code>, <code>$BAUD</code>, ...) are filled in above the steps. <strong>+ variable</strong> adds your
+own.</li>
+<li><strong>Custom</strong> on a scanned node row puts its id into <code>$OLD_ID</code> and its identity into <code>$VENDOR</code>, <code>$PRODUCT</code>,
+<code>$REVISION</code>, <code>$SERIAL</code>.</li>
+<li><strong>Preview &amp; run...</strong> shows the same exact-frame preview as Set ID.</li>
+<li><strong>Save as recipe...</strong> stores the sequence as the recipe for a vendor id (see the walkthrough
+<a href="#commission-an-unknown-device-and-save-a-recipe">Commission an unknown device</a>).</li>
+<li><strong>Export JSON</strong> / <strong>Import JSON</strong> share sequences as files.</li>
+</ul>
+<p>The editor keeps your steps between sessions.</p>
+<table>
+<thead>
+<tr>
+<th>Step</th>
+<th>What it sends</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>sdo_write</code></td>
+<td>SDO download: node, index, sub, type (u8, u16, u32, i8, i16, i32, u64, i64, f32, str, bytes), value.</td>
+</tr>
+<tr>
+<td><code>sdo_read</code></td>
+<td>SDO upload; with an <strong>expect</strong> value the step fails when the device answers something else.</td>
+</tr>
+<tr>
+<td><code>store</code></td>
+<td>Writes 'save' to 0x1010 (sub 1 by default).</td>
+</tr>
+<tr>
+<td><code>nmt</code></td>
+<td>start, stop, preop, reset_node, reset_comm, to one node or all (0).</td>
+</tr>
+<tr>
+<td><code>raw</code></td>
+<td>Any frame: id, data, 29-bit (ext), FD.</td>
+</tr>
+<tr>
+<td><code>lss</code></td>
+<td>switch_global (waiting / configuration), switch_selective (vendor, product, revision, serial), configure_node_id, configure_bit_timing, activate_bit_timing, store, inquire_node_id.</td>
+</tr>
+<tr>
+<td><code>delay</code></td>
+<td>A pause in ms.</td>
+</tr>
+<tr>
+<td><code>reopen</code></td>
+<td>Reopens the adapter at another bit rate (kbit/s).</td>
+</tr>
+<tr>
+<td><code>wait_node</code></td>
+<td>Checks that a node answers (heartbeat, boot-up or SDO), with a timeout.</td>
+</tr>
+<tr>
+<td><code>wait_traffic</code></td>
+<td>Checks that any frame arrives, with a timeout.</td>
+</tr>
+</tbody>
+</table>
+<p>Placeholders: <code>$OLD_ID</code>, <code>$NEW_ID</code>, <code>$BAUD</code> (kbit/s), <code>$VENDOR</code>, <code>$PRODUCT</code>, <code>$REVISION</code>, <code>$SERIAL</code>, and your
+own variables. Per step, <strong>always</strong> runs it also after a failure, <strong>optional</strong> makes a failure only a warning.</p>
+<h2 id="decode-dbc-canopen-j1939">Decode: DBC, CANopen, J1939</h2>
+<p>The <strong>Decode</strong> tab has three views, <strong>DBC</strong>, <strong>CANopen</strong> and <strong>J1939</strong>. Decoded values appear:</p>
+<ul>
+<li>in the receive list's <strong>Decoded</strong> column;</li>
+<li>on this tab;</li>
+<li>as signals for <a href="#dashboards">dashboards</a> and for Claude.</li>
+</ul>
+<p>The decoder setup (DBC files, EDS per node, J1939 channels) is saved with the settings and in projects.</p>
+<h3 id="dbc">DBC</h3>
+<figure><a href="img/decode-dbc.png"><img src="img/decode-dbc.png" alt="DBC view with live signal values" loading="lazy" /></a><figcaption>DBC view with live signal values</figcaption></figure>
+<ul>
+<li>Give the full path of a <code>.dbc</code> file and click <strong>Load</strong>, or <strong>Upload...</strong> one. Choose <strong>All channels</strong> or one
+channel. Several files can be loaded; <strong>×</strong> unloads one.</li>
+<li>The <strong>Signals</strong> table lists every message and signal with its live value, unit and range (and the named
+values). Type into the filter to find a message or signal.</li>
+<li>Multiplexed messages decode (the multiplexer and the signals of the active multiplexer value).</li>
+<li>J1939 messages of a DBC (frame format J1939PG) match by PGN on channels with J1939 on, so every source
+address decodes; the value column then shows one value per source address (<code>SA 0: ...</code>).</li>
+</ul>
+<p>With a DBC loaded, the transmit dialog has the <strong>DBC message</strong> mode: see
+<a href="#decode-with-a-dbc-and-transmit-by-signal-value">Decode with a DBC and transmit by signal value</a>.</p>
+<h3 id="canopen">CANopen</h3>
+<figure><a href="img/decode-canopen.png"><img src="img/decode-canopen.png" alt="CANopen view: EDS on node 5, its object dictionary with values read from the device, and the EMCY log" loading="lazy" /></a><figcaption>CANopen view: EDS on node 5, its object dictionary with values read from the device, and the EMCY log</figcaption></figure>
+<ul>
+<li>Set the <strong>Node</strong> id, the channel, and give the path of an <code>.eds</code>, <code>.dcf</code> or <code>.xdd</code> file: <strong>Assign</strong>, or
+<strong>Upload...</strong>.</li>
+<li>The node table lists the nodes with a file and the nodes seen sending heartbeats (marked &quot;no EDS&quot;), their
+PDOs and their NMT state from the heartbeats.</li>
+<li>PDOs decode from the file's mapping. <strong>Read PDO mapping</strong> reads the device's real mapping over SDO (uploads
+only) and decodes with that instead (marked <strong>from device</strong>).</li>
+<li><strong>Objects...</strong> opens the object dictionary browser: index, sub, name, type, access, default, and the value.
+<strong>Read</strong> reads one object from the device. <strong>Write...</strong> asks for a value and opens the exact-frame preview.
+The filter finds objects by name or index.</li>
+<li><strong>Start</strong>, <strong>Stop</strong>, <strong>Pre-op</strong> and <strong>Reset</strong> send NMT commands to the node, after the same preview.</li>
+<li>The <strong>EMCY log</strong> decodes emergency messages: the error code with its meaning, the error register bits and the
+vendor-specific bytes. <strong>Clear</strong> empties it (and the J1939 transport-protocol list).</li>
+</ul>
+<p>Every write (SDO write, NMT) is a plan, as on the Nodes tab: nothing is sent before you have seen the frames
+and confirmed.</p>
+<h3 id="j1939">J1939</h3>
+<figure><a href="img/decode-j1939.png"><img src="img/decode-j1939.png" alt="J1939 view: address claims, DM1 trouble codes and a reassembled BAM transfer" loading="lazy" /></a><figcaption>J1939 view: address claims, DM1 trouble codes and a reassembled BAM transfer</figcaption></figure>
+<p>Tick <strong>J1939 decoding on</strong> for each channel that carries J1939. Then:</p>
+<ul>
+<li>29-bit IDs split into priority, PGN, destination and source address; the receive list's Decoded column shows
+the PGN name and addresses.</li>
+<li><strong>ECUs (address claims)</strong> lists every address claim with its NAME decoded: identity number, manufacturer
+code, function, ECU and function instance, vehicle system, industry group, arbitrary address capability.</li>
+<li><strong>DM1 active diagnostic trouble codes</strong> shows the lamps (MIL, RSL, AWL, PL; lit when on) and the active DTCs
+(SPN, FMI, occurrence count) per ECU.</li>
+<li><strong>Transport protocol messages</strong> lists messages longer than 8 bytes, reassembled from RTS/CTS and BAM
+transfers (and aborted ones with the reason), with the decoded content.</li>
+</ul>
+<h3 id="signal-names">Signal names</h3>
+<table>
+<thead>
+<tr>
+<th>Source</th>
+<th>Signal key</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>DBC</td>
+<td><code>dbc/&lt;Message&gt;/&lt;Signal&gt;</code></td>
+</tr>
+<tr>
+<td>DBC, J1939 message</td>
+<td><code>j1939/&lt;SA&gt;/&lt;PGN&gt;.&lt;Signal&gt;</code></td>
+</tr>
+<tr>
+<td>CANopen PDO</td>
+<td><code>canopen/&lt;node&gt;/&lt;PDO&gt;.&lt;variable&gt;</code>, for example <code>canopen/5/TPDO1.Position</code></td>
+</tr>
+<tr>
+<td>CANopen NMT state, EMCY</td>
+<td><code>canopen/&lt;node&gt;/NMT</code>, <code>canopen/&lt;node&gt;/EMCY.code</code>, <code>canopen/&lt;node&gt;/EMCY.register</code></td>
+</tr>
+<tr>
+<td>J1939 DM1</td>
+<td><code>j1939/&lt;SA&gt;/DM1.ActiveDTCs</code> (number of active DTCs)</td>
+</tr>
+<tr>
+<td>Quick signal</td>
+<td><code>raw/&lt;name&gt;</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="dashboards">Dashboards</h2>
+<figure><a href="img/dashboards.png"><img src="img/dashboards.png" alt="A dashboard with a time plot, a gauge, numeric tiles and a lamp" loading="lazy" /></a><figcaption>A dashboard with a time plot, a gauge, numeric tiles and a lamp</figcaption></figure>
+<p>The <strong>Dashboards</strong> tab holds any number of named dashboards. Pick one in the list; <strong>New</strong>, <strong>Rename</strong> and
+<strong>Delete</strong> manage them.</p>
+<table>
+<thead>
+<tr>
+<th>Widget</th>
+<th>Shows</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Time plot</td>
+<td>One or more signals over 10 s to 10 min. <strong>Pause</strong> freezes it; drag across the plot to zoom, double-click to zoom out; <strong>CSV</strong> saves the plotted values.</td>
+</tr>
+<tr>
+<td>XY plot</td>
+<td>One signal against another over a time window.</td>
+</tr>
+<tr>
+<td>Gauge</td>
+<td>A value on a dial with min, max, unit, number format and coloured threshold bands.</td>
+</tr>
+<tr>
+<td>Numeric tile</td>
+<td>A value with unit and format (auto, 0, 0.0, 0.00, 0.000, hex) and threshold colours. Named values show as text.</td>
+</tr>
+<tr>
+<td>Bit lamp</td>
+<td>On or off: when the value is not 0, when one bit is set, or when the value is at or above a threshold; with on and off colours.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="edit-the-layout">Edit the layout</h3>
+<p>Click <strong>Edit layout</strong>. The button becomes <strong>Done</strong>, and <strong>+ Widget</strong> appears.</p>
+<figure><a href="img/dash-edit.png"><img src="img/dash-edit.png" alt="Edit mode: move by the title bar, resize by the corner" loading="lazy" /></a><figcaption>Edit mode: move by the title bar, resize by the corner</figcaption></figure>
+<ul>
+<li><strong>+ Widget</strong> asks for the widget type, then its settings.</li>
+<li>Drag a widget by its title bar to move it; drag its bottom-right corner to resize. Widgets snap to a
+12-column grid and never overlap.</li>
+<li><strong>⚙</strong> opens a widget's settings, <strong>×</strong> removes it.</li>
+</ul>
+<figure><a href="img/dash-widget.png"><img src="img/dash-widget.png" alt="Widget settings with the signal picker" loading="lazy" /></a><figcaption>Widget settings with the signal picker</figcaption></figure>
+<p>In the settings, <strong>Search signals</strong> lists every signal that is being published right now, with its current
+value. Click one to use it (for a time plot: to add it). You can also type a key. Gauges and tiles take
+min, max and unit from the signal when you leave them empty.</p>
+<p>Changes are saved as you make them.</p>
+<h3 id="quick-signals-without-a-dbc">Quick signals (without a DBC)</h3>
+<p><strong>Quick signals</strong> defines signals on raw frames, for when there is no DBC file.</p>
+<figure><a href="img/quick-signals.png"><img src="img/quick-signals.png" alt="The quick signals editor with a live preview" loading="lazy" /></a><figcaption>The quick signals editor with a live preview</figcaption></figure>
+<p>Per signal: <strong>Name</strong>, <strong>Channel</strong> (any or one), <strong>ID</strong> (hex; <strong>Ext</strong> for 29-bit, set automatically above
+7FF), <strong>Start bit</strong>, <strong>Length</strong>, <strong>Byte order</strong> (Intel or Motorola), <strong>Signed</strong>, <strong>Factor</strong>, <strong>Offset</strong>,
+<strong>Unit</strong>, <strong>Min</strong>, <strong>Max</strong>. The <strong>Now</strong> column shows the value decoded from the latest frame while you type.
+<strong>Save</strong> publishes them as <code>raw/&lt;name&gt;</code>.</p>
+<p>Bit numbering is as in DBC files: for Intel (little endian) the start bit is the least significant bit; for
+Motorola (big endian) it is the most significant bit, and bit 7 of byte 0 is the first bit on the wire.
+Value = raw × factor + offset.</p>
+<p>Dashboards and quick signals are saved with the settings and in projects. Dashboards look the same in the light
+theme:</p>
+<figure><a href="img/light-theme.png"><img src="img/light-theme.png" alt="The same dashboard in the light theme" loading="lazy" /></a><figcaption>The same dashboard in the light theme</figcaption></figure>
+<h2 id="projects-and-settings">Projects and settings</h2>
+<figure><a href="img/projects.png"><img src="img/projects.png" alt="The Projects dialog" loading="lazy" /></a><figcaption>The Projects dialog</figcaption></figure>
+<p><strong>Project</strong> in the top bar saves or opens a whole setup under a name. A project keeps:</p>
+<ul>
+<li>the transmit list;</li>
+<li>the adapter settings of the connected channels;</li>
+<li>the decoder setup (DBC files, EDS per node, J1939 channels);</li>
+<li>the dashboards and quick signals.</li>
+</ul>
+<p><strong>Save</strong> stores the current setup under the name you type. <strong>Open</strong> loads a saved project: cyclic transmits
+stop, the transmit list, decoders and dashboards are replaced, and if no adapter is connected CANopener asks
+whether to connect the project's adapters.</p>
+<p>Without projects, CANopener remembers anyway (in <code>settings.json</code>): the last connection of each channel (the
+Connect dialog is filled in with it), the transmit list, the decoder setup, dashboards and quick signals.
+Adapters are never connected automatically at start.</p>
+<p>View preferences (theme, last tab, sort order, the receive / transmit split, the trace filter, the custom
+sequence editor) are kept per PC in the window's own storage.</p>
+<h2 id="task-walkthroughs">Task walkthroughs</h2>
+<h3 id="watch-a-bus-and-find-which-id-floods-it">Watch a bus and find which ID floods it</h3>
+<ol>
+<li>Connect the adapter with <strong>Listen-only</strong> ticked (see <a href="#listen-only">Listen-only</a>).</li>
+<li>Look at the status bar: bus load and frames per second. The load bar changes colour above 50 % and turns
+red above 80 %.</li>
+<li>Open <strong>Statistics</strong>. <strong>Busiest IDs</strong> ranks the periodic IDs by frames per second; the top rows are what
+loads the bus. <strong>Min - max ms</strong> shows whether an ID is regular or bursty.</li>
+<li>On <strong>Receive / Transmit</strong>, click the <strong>Count</strong> header (twice for highest first) or <strong>Cycle ms</strong>. Type the
+suspect ID into the <strong>ID filter</strong> to watch only it.</li>
+<li>To see the order of frames around a burst, open <strong>Trace</strong>, type the busy IDs into <strong>IDs</strong> and tick
+<strong>exclude</strong> to hide them, or leave <strong>exclude</strong> off to see only them. <strong>Delta (ms)</strong> shows the gaps.</li>
+</ol>
+<p>Error frames and bus state warnings show in the status bar and on the Statistics card. Many error frames with
+little traffic often mean a wrong bit rate or missing termination.</p>
+<h3 id="send-a-cyclic-frame">Send a cyclic frame</h3>
+<ol>
+<li>Connect (not listen-only).</li>
+<li>Under <strong>Transmit</strong>, click <strong>+ New</strong>.</li>
+<li>Type the <strong>ID (hex)</strong>, the <strong>Data (hex bytes)</strong> and a <strong>Cycle time ms</strong> (for example 100).</li>
+<li>Click <strong>Add</strong>.</li>
+<li>Tick <strong>On</strong> in the new row. <strong>Count</strong> starts counting.</li>
+</ol>
+<p>Untick <strong>On</strong> to stop it; <strong>Stop all</strong> stops every cyclic entry. To send a frame once, set the cycle time to
+0 and click <strong>Send</strong> (or select the row and press Space). To copy a frame you see on the bus, select it in the
+receive list and click <strong>To transmit</strong>.</p>
+<h3 id="record-a-fault-and-send-the-file-to-a-colleague">Record a fault and send the file to a colleague</h3>
+<ol>
+<li>Connect the channels you need (listen-only is fine).</li>
+<li>On <strong>Record &amp; Replay</strong>, type a <strong>File name</strong>, for example <code>fault-hunt</code>, and choose the format your
+colleague can open: <code>.trc</code> for PCAN-View, <code>.blf</code> or <code>.asc</code> for Vector tools, <code>.log</code> for candump, <code>.csv</code> for a
+spreadsheet.</li>
+<li>Click <strong>Start recording</strong> before the fault happens. The top bar shows <strong>REC</strong> with the frame count.</li>
+<li>When the fault has happened, click <strong>Stop</strong>.</li>
+<li>In <strong>Recordings</strong>, click <strong>Download</strong> on the file to save a copy where you want, or take it from the
+<code>recordings</code> folder next to <code>canopener.exe</code> and attach it to an e-mail.</li>
+</ol>
+<p>Missed the start? <strong>Trace</strong> &gt; <strong>Save...</strong> writes the last few minutes the trace buffer still holds (about
+260 000 frames per channel) to a file.</p>
+<h3 id="open-a-recording-offline-1">Open a recording offline</h3>
+<ol>
+<li>If the file is not in the recordings folder yet, click <strong>Import file...</strong> in <strong>Recordings</strong> and pick it.</li>
+<li>Click <strong>Open</strong> on the file. No adapter is needed.</li>
+<li>The receive list shows the file's IDs with their recorded cycle times; choose the file channel in the
+channel selector to see only it. The trace shows the frames from the start.</li>
+<li>Close the file with the <strong>×</strong> on its chip.</li>
+</ol>
+<p>To play the file onto a real bus instead, use <strong>Replay...</strong>.</p>
+<h3 id="give-a-canopen-node-a-new-id">Give a CANopen node a new ID</h3>
+<p>With the simulator you can try both ways safely: demo device A has an SDO recipe, the demo LSS device uses LSS.</p>
+<p><strong>With an SDO recipe</strong> (a device CANopener has a recipe for):</p>
+<ol>
+<li>
+<p>On <strong>Nodes (CANopen)</strong>, click <strong>Scan</strong>.</p>
+</li>
+<li>
+<p>On the node's row (for example node 5, recipe <code>sim-demo-a</code>), click <strong>Set ID...</strong>.</p>
+</li>
+<li>
+<p>Type the <strong>New node ID</strong> (for example 6) and click <strong>Preview</strong>.</p>
+</li>
+<li>
+<p>Read the frames: the SDO write of the node-id object, the store to 0x1010:01, the NMT reset, and the check
+that node 6 answers.</p>
+<figure><a href="img/nodes-preview-sdo.png"><img src="img/nodes-preview-sdo.png" alt="Set-ID preview of demo device A: SDO write, store, NMT reset, verify" loading="lazy" /></a><figcaption>Set-ID preview of demo device A: SDO write, store, NMT reset, verify</figcaption></figure>
+</li>
+<li>
+<p>Tick <strong>I checked the frames above and want to send them</strong> and click <strong>Run</strong>.</p>
+</li>
+<li>
+<p>The job log shows each step; the result says whether the node answered at its new id. <strong>Scan</strong> again to see
+it in the table.</p>
+</li>
+</ol>
+<p>If the device needs a power cycle (demo device B), the preview warns, and the result says &quot;power cycle
+required&quot;. Switch the device off and on, then scan. (In the simulator, demo device B applies its new id at
+the next NMT reset instead: Decode &gt; CANopen &gt; <strong>Reset</strong> on node 10.)</p>
+<p><strong>With LSS</strong> (CiA 305):</p>
+<ol>
+<li>Scan, then <strong>Set ID...</strong> on the node (for example node 20, recipe <code>generic-lss</code>).</li>
+<li>The preview selects the device by its identity (switch selective: vendor, product, revision, serial), so
+only this device is configured even when several LSS devices share the bus. Then configure node id, store,
+switch every device back to waiting (an <strong>always</strong> step), NMT reset communication, and the check of the new
+id.</li>
+<li>Tick the box and <strong>Run</strong>.</li>
+</ol>
+<p>For a single LSS device whose identity you do not know (it may not even have a valid node id), use the custom
+sequence template <strong>LSS: give the only device on the bus a node id</strong>. It uses switch global, so connect only
+that one device.</p>
+<h3 id="change-bit-rates">Change bit rates</h3>
+<p>The whole bus has to move together. Plan it so you do not lose contact with devices halfway:</p>
+<ol>
+<li>Scan, so CANopener knows the devices and their recipes.</li>
+<li>For every LSS device at once: <strong>Bit rate of all LSS devices...</strong>, choose the new rate, <strong>Preview</strong>, check,
+<strong>Run</strong>. The devices store the new rate and switch after the switch delay; the adapter reopens at the new
+rate and waits for traffic.</li>
+<li>For a device with an SDO bit-rate recipe (demo device A): <strong>Bit rate...</strong> on its row. A device that only
+switches after a power cycle (the preview says so) is reached again after you power it and reconnect at the
+new rate.</li>
+<li>Afterwards, check the chip in the top bar shows the new rate, and <strong>Scan</strong> again.</li>
+</ol>
+<p>Devices without LSS or a recipe stay at the old rate and are no longer heard; the preview warns about this.
+Change those first (with their own tool or a custom sequence ending in a <code>reopen</code> step), and LSS devices last.</p>
+<h3 id="commission-an-unknown-device-and-save-a-recipe">Commission an unknown device and save a recipe</h3>
+<p>For a device CANopener has no recipe for. You need to know, from the device's manual or EDS, which object holds
+its node id (and whether it needs a store and a reset).</p>
+<ol>
+<li>
+<p><strong>Scan</strong>. The device shows with recipe <code>generic-lss</code>. If it does not support LSS, Set ID would fail.</p>
+</li>
+<li>
+<p>Click <strong>Custom</strong> on its row: <code>$OLD_ID</code> and the identity variables are filled in.</p>
+</li>
+<li>
+<p><strong>Start from a template...</strong> &gt; <strong>SDO: write node id, store, reset</strong>.</p>
+</li>
+<li>
+<p>In the first step (<code>sdo_write</code>), set the <strong>index</strong>, <strong>sub</strong> and <strong>type</strong> of the device's node-id object.
+Leave the value as <code>$NEW_ID</code>.</p>
+</li>
+<li>
+<p>Type the new id into <code>$NEW_ID</code>.</p>
+</li>
+<li>
+<p><strong>Preview &amp; run...</strong>, check every frame, tick, <strong>Run</strong>. The result table shows each step's status.</p>
+</li>
+<li>
+<p>When it worked, click <strong>Save as recipe...</strong>:</p>
+<ul>
+<li><strong>Vendor id (hex)</strong>: filled in from the scan;</li>
+<li><strong>Name</strong>: a short name;</li>
+<li><strong>Used for</strong>: changing the node ID (or the bit rate);</li>
+<li><strong>New id takes effect</strong>: immediately / after the reset in the steps, or after a power cycle;</li>
+<li><strong>Note</strong>: where the mechanism comes from (manual section, EDS, a trace).</li>
+</ul>
+<p>Keep <code>$OLD_ID</code>, <code>$NEW_ID</code> and <code>$BAUD</code> in the steps: the recipe fills them in each time.</p>
+</li>
+<li>
+<p>From now on, <strong>Set ID...</strong> (and <strong>Bit rate...</strong>, for a bit-rate recipe) picks your recipe for every device
+with that vendor id. It is stored in <code>recipes\user-recipes.json</code>.</p>
+</li>
+</ol>
+<p><strong>Export JSON</strong> saves the sequence to share it; a colleague loads it with <strong>Import JSON</strong> and saves it as a
+recipe on their PC.</p>
+<h3 id="decode-with-a-dbc-and-transmit-by-signal-value">Decode with a DBC and transmit by signal value</h3>
+<ol>
+<li>On <strong>Decode</strong> &gt; <strong>DBC</strong>, give the path of the <code>.dbc</code> file and click <strong>Load</strong> (or <strong>Upload...</strong>).</li>
+<li>The <strong>Signals</strong> table shows live values. The receive list's <strong>Decoded</strong> column shows the decoded messages
+(tick <strong>show Tx</strong> to see your own frames decoded too).</li>
+<li>To send by signal value: <strong>+ New</strong> under Transmit. In <strong>Data from</strong>, choose <strong>DBC message ...</strong>.</li>
+<li>Type the signal values (lists for named values). The ID comes from the DBC; the bytes are encoded when
+you click <strong>Add</strong> and show in the transmit row.</li>
+<li>Set a cycle time if wanted, <strong>Add</strong>, and tick <strong>On</strong>.</li>
+</ol>
+<p>To change a value while it is sending, click <strong>Edit</strong>, change the signal, <strong>Save</strong>.</p>
+<h3 id="canopen-eds-pdos-sdo-browser-nmt-emcy">CANopen EDS: PDOs, SDO browser, NMT, EMCY</h3>
+<ol>
+<li>On <strong>Decode</strong> &gt; <strong>CANopen</strong>, type the <strong>Node</strong> id, give the path of the device's <code>.eds</code> (or <code>.dcf</code>, <code>.xdd</code>)
+and click <strong>Assign</strong>.</li>
+<li>The node's PDOs decode from the file: values appear in the receive list's Decoded column (for example
+<code>TPDO1 node 5 Position=485 Counter=2290</code>) and as <code>canopen/&lt;node&gt;/...</code> signals for dashboards.</li>
+<li>If the device's mapping differs from the file's defaults, click <strong>Read PDO mapping</strong>: the real mapping is read
+over SDO and used instead.</li>
+<li><strong>Objects...</strong> opens the object dictionary. <strong>Read</strong> shows the value in the device. <strong>Write...</strong> asks for a
+value, then shows the SDO frames to confirm.</li>
+<li><strong>Start</strong>, <strong>Stop</strong>, <strong>Pre-op</strong>, <strong>Reset</strong>: NMT commands for the node, after the preview.</li>
+<li>Emergencies of known nodes appear in the <strong>EMCY log</strong>, decoded.</li>
+</ol>
+<h3 id="j1939-ecus-dm1-transport-messages">J1939: ECUs, DM1, transport messages</h3>
+<ol>
+<li>Connect at the bus rate (often 250 or 500 kbit/s), listen-only on a running vehicle.</li>
+<li>On <strong>Decode</strong> &gt; <strong>J1939</strong>, tick the channel.</li>
+<li><strong>ECUs</strong> fills as ECUs claim addresses. Address claims are sent at power-up and on request, so switch the
+ignition on after connecting, or wait.</li>
+<li><strong>DM1</strong> shows the active trouble codes and lamps of every ECU that sends them, single-frame and multi-packet
+(BAM) alike.</li>
+<li><strong>Transport protocol messages</strong> shows every reassembled long message.</li>
+<li>Load a J1939 DBC on the DBC view to decode signals by PGN for every source address.</li>
+</ol>
+<h3 id="build-a-dashboard">Build a dashboard</h3>
+<ol>
+<li><strong>Dashboards</strong> &gt; <strong>New</strong>, type a name. The new dashboard opens in edit mode.</li>
+<li><strong>+ Widget</strong> &gt; for example <strong>Time plot</strong>. Click signals in the picker to add them, choose the time window,
+<strong>Add</strong>.</li>
+<li>Add a <strong>Gauge</strong> or <strong>Numeric tile</strong> for a single value, a <strong>Bit lamp</strong> for a status bit.</li>
+<li>Move and resize the widgets, then click <strong>Done</strong>.</li>
+</ol>
+<p>No DBC for the frame you want to watch? Use <strong>Quick signals</strong>:</p>
+<ol>
+<li>Click <strong>Quick signals</strong>, <strong>+ Signal</strong>.</li>
+<li>Name it, type the <strong>ID</strong>, the <strong>Start bit</strong> and <strong>Length</strong>, byte order and sign, and factor / offset if
+needed. Watch the <strong>Now</strong> column: it decodes the latest frame as you type, so you can find the right bits
+by trial.</li>
+<li><strong>Save</strong>. The signal appears as <code>raw/&lt;name&gt;</code> in the widget picker.</li>
+</ol>
+<h3 id="save-and-reuse-a-setup-with-projects">Save and reuse a setup with projects</h3>
+<ol>
+<li>Connect the adapters, fill the transmit list, load the decoders, build the dashboards.</li>
+<li><strong>Project</strong> &gt; type a name &gt; <strong>Save</strong>.</li>
+<li>Later, or on another day: <strong>Project</strong> &gt; pick it in <strong>Or open</strong> &gt; <strong>Open</strong>. CANopener offers to connect the
+project's adapters.</li>
+</ol>
+<p>Project files are in the <code>projects</code> folder; copy one to a colleague's <code>projects</code> folder to share the setup.</p>
+<h2 id="claude-mcp">Claude (MCP)</h2>
+<p>While CANopener runs, it serves an MCP endpoint at <code>http://127.0.0.1:8775/mcp/</code> (the address is also shown in
+the About box). Add it to Claude Code once:</p>
+<pre><code>claude mcp add --transport http canopener http://127.0.0.1:8775/mcp/
+</code></pre>
+<p>Claude then works on the same bus session as your window: it sees what you see, and you see what it does.
+Channels are numbered from 0 for Claude (channel 0 is CAN1 in the window).</p>
+<p><strong>What Claude can do without asking.</strong> The read tools only read. Their names start with <code>get_</code>, <code>list_</code>,
+<code>read_</code> or <code>scan_</code>, so you can allowlist them in Claude Code:</p>
+<ul>
+<li><code>get_about</code>, <code>get_status</code>, <code>list_devices</code>, <code>get_bus_stats</code>;</li>
+<li><code>get_receive_table</code>, <code>get_trace</code>, <code>get_signals</code>, <code>get_signal_history</code>, <code>get_decoded_frames</code>;</li>
+<li><code>list_recordings</code>, <code>read_recording</code>;</li>
+<li><code>scan_nodes</code>, <code>get_node_scan</code>, <code>get_node_job</code>, <code>list_recipes</code>;</li>
+<li>the previews: <code>get_set_node_id_preview</code>, <code>get_baud_preview</code>, <code>get_sequence_preview</code>,
+<code>get_sdo_write_preview</code>, <code>get_nmt_preview</code> (they return frames, they send nothing);</li>
+<li><code>get_decode_config</code>, <code>list_dbc_messages</code>, <code>get_canopen_state</code>, <code>list_object_dictionary</code>, <code>read_sdo</code>,
+<code>get_j1939_state</code>;</li>
+<li><code>list_dashboards</code>, <code>get_dashboard</code>;</li>
+<li>plugin read tools, for example <code>get_heartbeat_nodes</code> of the shipped example.</li>
+</ul>
+<p><code>scan_nodes</code> and <code>read_sdo</code> do send frames (SDO reads, and a listen period), but they change nothing on a node.</p>
+<p><strong>What stays on approval.</strong> Every other tool has another verb and transmits, records, replays, loads files or
+changes a node: <code>connect_channel</code>, <code>disconnect_channel</code>, <code>send_frame</code>, <code>add_transmit_entry</code>,
+<code>set_transmit_entry</code>, <code>stop_all_transmit</code>, <code>start_recording</code>, <code>stop_recording</code>, <code>start_replay</code>, <code>stop_replay</code>,
+<code>open_recording_view</code>, <code>load_dbc_file</code>, <code>assign_eds_file</code>, <code>set_j1939_decoding</code>, <code>load_pdo_mapping_from_device</code>,
+<code>save_dashboard</code>, <code>delete_dashboard</code>, <code>save_user_recipe</code> and <code>run_node_plan</code>. Keep these on approval, so Claude
+Code asks you for each call.</p>
+<p><strong>Node changes take two steps.</strong> Claude first calls a preview tool (<code>get_set_node_id_preview</code>,
+<code>get_baud_preview</code>, <code>get_sequence_preview</code>, <code>get_sdo_write_preview</code> or <code>get_nmt_preview</code>). It returns the exact
+frames and a token, and Claude shows you the frames. Then it calls <code>run_node_plan(token, title)</code>, which runs
+that plan unchanged. The title must be the preview's title, for example <code>Node 5 -&gt; 6</code>, so the approval prompt
+says what will run. The run is logged in <code>logs\nodes.log</code> as done by Claude.</p>
+<p>Things to ask, for example:</p>
+<ul>
+<li>&quot;What is on the bus? Which IDs are busiest?&quot;</li>
+<li>&quot;Scan for CANopen nodes and tell me what you find.&quot;</li>
+<li>&quot;Show me the frames to change node 5 to node 6.&quot; (and, after reading them, &quot;Run it.&quot;)</li>
+<li>&quot;Decode the last DM1 of every ECU.&quot;</li>
+<li>&quot;Open fault-hunt.trc and find when 0x185 stopped.&quot;</li>
+</ul>
+<h2 id="plugins">Plugins</h2>
+<p>A plugin is a folder with a <code>manifest.json</code> and a Python module. It can add:</p>
+<ul>
+<li>tabs to the window;</li>
+<li>REST routes;</li>
+<li>MCP tools for Claude;</li>
+<li>live frame consumers, which never slow the receive threads down.</li>
+</ul>
+<p>To install one, put its folder into the <code>plugins</code> folder next to <code>canopener.exe</code> and restart CANopener. The
+<strong>Plugins</strong> tab lists what loaded, from which folder, and what failed (with the error). A broken plugin never
+stops CANopener.</p>
+<figure><a href="img/plugins.png"><img src="img/plugins.png" alt="The Plugins tab with the shipped example" loading="lazy" /></a><figcaption>The Plugins tab with the shipped example</figcaption></figure>
+<p>The shipped example is a CANopen heartbeat monitor: the <strong>Heartbeats</strong> tab shows, per node, the NMT state, the
+heartbeat period, when it was last seen, the count and the boot-ups, and Claude gets <code>get_heartbeat_nodes</code>.</p>
+<p>Plugins run with full access to your PC and the bus: install only what you have reviewed. To write one, see
+<a href="plugins.html">Writing plugins</a>.</p>
+<h2 id="command-line">Command line</h2>
+<p><code>canopener-cli.exe</code> (next to <code>canopener.exe</code>) runs the same program with a console. <code>canopener-cli.exe --help</code>
+lists the commands, <code>canopener-cli.exe &lt;command&gt; --help</code> the options.</p>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>Does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>app</code></td>
+<td>The app window (the default when started without a command). <code>--port</code>.</td>
+</tr>
+<tr>
+<td><code>serve</code></td>
+<td>The server only; open <code>http://127.0.0.1:8775/</code> in a browser. <code>--port</code>, <code>--host</code>. Ctrl+C stops it.</td>
+</tr>
+<tr>
+<td><code>devices</code></td>
+<td>Lists the adapters that are plugged in. <code>--json</code>.</td>
+</tr>
+<tr>
+<td><code>scan</code></td>
+<td>Scans a CANopen bus and lists the nodes. <code>--seconds</code>, <code>--sdo-timeout</code>, <code>--json</code>.</td>
+</tr>
+<tr>
+<td><code>set</code></td>
+<td>Changes a node's node id: <code>--from</code>, <code>--to</code>, <code>--method</code> (lss, readonly, sdo:&lt;name&gt;), <code>--verify-timeout</code>, <code>--recipes</code>.</td>
+</tr>
+<tr>
+<td><code>baud</code></td>
+<td>Changes the bit rate: <code>--to</code> (kbit/s), <code>--node</code> (one node) or <code>--global</code> (every LSS device, the default), <code>--switch-delay-ms</code>.</td>
+</tr>
+<tr>
+<td><code>record</code></td>
+<td>Captures for <code>--seconds</code> to <code>--out</code>; the extension picks the format. <code>--listen-only</code>.</td>
+</tr>
+<tr>
+<td><code>trace</code></td>
+<td>Captures to <code>.trc</code> (or <code>.canbin</code> with <code>--canbin</code>); <code>trace convert in.canbin out.trc</code>.</td>
+</tr>
+<tr>
+<td><code>replay</code></td>
+<td>Plays a recorded file onto the bus: <code>--speed</code>, <code>--only</code> (all, rx, tx).</td>
+</tr>
+<tr>
+<td><code>convert</code></td>
+<td>Converts between recording formats, by extension.</td>
+</tr>
+</tbody>
+</table>
+<p>The bus commands take <code>--interface</code> (pcan, kvaser, slcan, gs_usb, vector, ixxat, socketcan, virtual; default
+virtual), <code>--channel</code>, <code>--bitrate</code> (bit/s, default 250000), <code>--fd</code>, <code>--data-bitrate</code>, and <code>-v</code> to print every
+step and frame. The command line does not start the simulator: without <code>--interface</code>, a <code>scan</code> finds an empty
+virtual bus.</p>
+<pre><code>canopener-cli.exe devices
+canopener-cli.exe scan    --interface kvaser --channel 0 --bitrate 250000
+canopener-cli.exe set     --interface pcan --from 1 --to 72
+canopener-cli.exe baud    --interface pcan --to 500 --node 72
+canopener-cli.exe record  --interface pcan --seconds 60 --out capture.blf --listen-only
+canopener-cli.exe replay  --interface pcan capture.blf --speed 1
+canopener-cli.exe convert capture.canbin capture.trc
+canopener-cli.exe serve   --port 8775
+</code></pre>
+<p><code>set</code> (and <code>baud --node</code>) scan first. <code>set</code> and <code>baud</code> print the same exact-frame plan as the window and ask <code>Send this? [y/N]</code> before
+sending anything. <code>--yes</code> skips the question (for scripts).</p>
+<p><code>serve --host 0.0.0.0</code> makes CANopener reachable from other PCs. There is no login: anyone who can reach the
+port can use the bus. Only do this on a network you trust.</p>
+<h2 id="files-and-folders">Files and folders</h2>
+<p>Everything sits next to <code>canopener.exe</code> (from source: in the repository folder):</p>
+<table>
+<thead>
+<tr>
+<th>Folder / file</th>
+<th>Contents</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>recordings\</code></td>
+<td>Recordings, trace saves and imported files.</td>
+</tr>
+<tr>
+<td><code>logs\canopener.log</code></td>
+<td>The app log.</td>
+</tr>
+<tr>
+<td><code>logs\nodes.log</code></td>
+<td>Every node scan, plan and run, with the frames.</td>
+</tr>
+<tr>
+<td><code>projects\</code></td>
+<td>Saved projects (one <code>.json</code> each).</td>
+</tr>
+<tr>
+<td><code>settings.json</code></td>
+<td>Last connections, transmit list, decoder setup, dashboards, quick signals.</td>
+</tr>
+<tr>
+<td><code>recipes\user-recipes.json</code></td>
+<td>Recipes saved from the custom mode.</td>
+</tr>
+<tr>
+<td><code>plugins\</code></td>
+<td>Your plugins.</td>
+</tr>
+<tr>
+<td><code>docs\user-guide.html</code></td>
+<td>This guide (open it by double-click; the About box opens it too).</td>
+</tr>
+<tr>
+<td><code>README.txt</code></td>
+<td>A one-page summary.</td>
+</tr>
+</tbody>
+</table>
+<p>To move CANopener to another PC, copy the whole folder. To start fresh, delete <code>settings.json</code>.</p>
+<p>Environment variables for special setups: <code>CANOPENER_HOME</code> puts the app folder elsewhere,
+<code>CANOPENER_PLUGIN_DIRS</code> adds plugin folders (separated by <code>;</code>), <code>CANOPENER_USER_RECIPES</code> points to another user
+recipes file.</p>
+<h2 id="troubleshooting">Troubleshooting</h2>
+<p><strong>Nothing happens on double-click.</strong> Run <code>canopener-cli.exe app</code> in a command prompt to see the message, and
+read <code>logs\canopener.log</code>.</p>
+<p><strong>&quot;Port 8775 is in use by another program&quot;.</strong> Another program uses CANopener's port. Close it, or start
+CANopener on another port: <code>canopener-cli.exe app --port 8776</code> (the MCP address then changes too).</p>
+<p><strong>Windows protected your PC.</strong> See <a href="#download-and-start">Download and start</a>: <strong>More info</strong>, <strong>Run anyway</strong>.</p>
+<p><strong>An adapter is not detected.</strong></p>
+<ul>
+<li>Install the adapter's driver (PEAK, Kvaser, Vector, IXXAT). Unplug and replug, then <strong>Refresh</strong>.</li>
+<li>CANable with candleLight firmware: bind WinUSB once with Zadig.</li>
+<li>CANable with slcan firmware: it is a COM port; check Device Manager for its number and type it as the channel.</li>
+<li>Close other programs that hold the adapter (another CAN tool, a second CANopener on another port).</li>
+</ul>
+<p><strong>&quot;... cannot run at ... bit/s&quot;.</strong> That adapter's driver has no setting for that rate. The message lists the
+rates it can do.</p>
+<p><strong>&quot;... cannot be opened listen-only&quot; / &quot;does not support CAN FD&quot;.</strong> That interface has no listen-only mode or no
+CAN FD in CANopener (see the adapter table).</p>
+<p><strong>No frames at all.</strong></p>
+<ul>
+<li>Check the bit rate: a wrong rate shows as error frames or nothing.</li>
+<li>Check the wiring (CAN high, CAN low, ground) and the termination: 120 Ω at both ends of the bus, about 60 Ω
+measured between CAN high and CAN low with the power off.</li>
+<li>Something must acknowledge frames. A lone adapter that transmits, with no other node on the bus, sees its
+frames fail.</li>
+</ul>
+<p><strong>Error frames, bus state &quot;passive&quot; or &quot;bus off&quot;.</strong> Usually a wrong bit rate, missing termination, or a bad
+connection. A listen-only adapter cannot cause them.</p>
+<p><strong>The trace says frames were &quot;not shown live&quot;.</strong> More than 25 000 frames per second arrived. They are all in
+the buffer, in <strong>Save...</strong> and in any recording; only the live view skipped them.</p>
+<p><strong>A scan finds no node.</strong> Check the bit rate. The table note says whether there was other traffic. Devices that
+are in LSS configuration state or have no valid node id (255) do not answer SDO: use LSS.</p>
+<p><strong>A Set ID run failed.</strong> Read the job log and the result table: which step failed and what the device answered
+(an SDO abort code, a timeout). Steps marked <strong>always</strong> have already put LSS devices back to waiting. The run is
+in <code>logs\nodes.log</code>.</p>
+<p><strong>The Decoded column stays empty.</strong> Load a DBC or assign an EDS on the Decode tab, and switch J1939 on for
+J1939 channels. Your own frames are decoded too, but only show with <strong>show Tx</strong>.</p>
+<p><strong>A plugin does not load.</strong> The <strong>Plugins</strong> tab shows the error. Check <code>manifest.json</code> and restart CANopener
+after every change.</p>
+<p><strong>Claude does not see CANopener.</strong> CANopener must be running. Check the address in the About box (another port
+means another MCP address) and run <code>claude mcp list</code>.</p>
+<h2 id="faq">FAQ</h2>
+<p><strong>Does CANopener replace PCAN-View?</strong> For everyday work, yes: receive list, transmit list, trace, recording in
+the <code>.trc</code> format, statistics; with PEAK and many other adapters.</p>
+<p><strong>Can it damage a device?</strong> Watching cannot, especially in listen-only. Sending can, like any CAN tool:
+transmits and replays go onto the bus as you set them up. Node changes are always shown as exact frames first
+and need your confirmation.</p>
+<p><strong>Can I use two CANopener windows?</strong> Yes. Both show the same session. A second CANopener with its own adapters
+needs another port: <code>canopener-cli.exe app --port 8776</code>.</p>
+<p><strong>Does it run on Linux?</strong> From source, with SocketCAN, slcan, candleLight and the other python-can backends.
+The release download is for Windows.</p>
+<p><strong>Where are my recordings?</strong> In the <code>recordings</code> folder next to <code>canopener.exe</code>; the Record &amp; Replay tab shows
+the path.</p>
+<p><strong>Why does my vendor's device show &quot;generic-lss&quot;?</strong> CANopener ships no recipes for real devices. LSS is the
+standard way; if the device uses its own object instead, build the sequence once in the custom mode and save it
+as a recipe.</p>
+<p><strong>Is my data sent anywhere?</strong> No. CANopener runs locally and makes no connections to the internet. The MCP
+endpoint is only reachable from your own PC (unless you start <code>serve --host</code>).</p>
+
+</article>
+<footer>Generated from user-guide.md by docs/build_guide.py. See also: <a href="plugins.html">Writing plugins</a>.</footer>
+</main>
+</div>
+<script>
+(function () {
+  var root = document.documentElement, btn = document.getElementById("theme");
+  function get() { try { return localStorage.getItem("guide.theme"); } catch (e) { return null; } }
+  function set(t) { try { localStorage.setItem("guide.theme", t); } catch (e) { /* file:// or private mode */ } }
+  var t = get(); if (t) root.dataset.theme = t;
+  btn.onclick = function () {
+    var dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+    root.dataset.theme = dark ? "light" : "dark"; set(root.dataset.theme);
+  };
+  // highlight the section in view in the contents
+  var links = {}, current = null;
+  document.querySelectorAll("nav.toc a[href^='#']").forEach(function (a) { links[a.getAttribute("href").slice(1)] = a; });
+  var heads = Array.prototype.filter.call(document.querySelectorAll("article h2[id], article h3[id]"), function (h) { return links[h.id]; });
+  function onScroll() {
+    var y = window.scrollY + 80, hit = null;
+    for (var i = 0; i < heads.length; i++) { if (heads[i].offsetTop <= y) hit = heads[i]; else break; }
+    if (hit !== current) {
+      if (current) links[current.id].classList.remove("on");
+      if (hit) links[hit.id].classList.add("on");
+      current = hit;
+    }
+  }
+  window.addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+})();
+</script>
+</body>
+</html>

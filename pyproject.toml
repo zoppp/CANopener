@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "canopener"
-version = "0.2.1"
+dynamic = ["version"]                      # canopener/__init__.py: YYYY.MM.DD.HHMM (tools/bump_version.py)
 description = "CANopener: open-source CAN engineering toolbox (receive, trace, transmit, record/replay, statistics, CANopen node commissioning)"
 requires-python = ">=3.11"
 license = { text = "MIT" }
@@ -22,10 +22,13 @@ dependencies = [
 app = ["pywebview>=5"]
 gs_usb = ["gs_usb>=0.3", "pyusb>=1.2", "libusb-package>=1.0"]
 decode = ["cantools>=39"]
-dev = ["pytest>=8", "httpx>=0.27", "pyinstaller>=6"]
+dev = ["pytest>=8", "httpx>=0.27", "pyinstaller>=6", "markdown-it-py>=3"]   # markdown-it: docs/build_guide.py
 
 [project.scripts]
 canopener = "canopener.cli:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "canopener.__version__" }
 
 [tool.setuptools.packages.find]
 include = ["canopener*"]
