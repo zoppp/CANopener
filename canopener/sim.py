@@ -82,6 +82,10 @@ class SimNode:
         local.data_store[0x1008] = {0: self.name.encode()}
         local.data_store[0x1018] = {1: struct.pack("<I", self.vendor), 2: struct.pack("<I", self.product),
                                     3: struct.pack("<I", self.revision), 4: struct.pack("<I", self.serial)}
+        # the demo objects read back like on a real device (node id, bit rate in kbit/s)
+        local.data_store[0x2100] = {0: bytes([self.node_id])}
+        local.data_store[0x2101] = {0: struct.pack("<H", 250)}
+        local.data_store[0x2110] = {1: bytes([self.node_id])}
         local.add_write_callback(self._on_write)
         self.local = local
 

@@ -132,6 +132,7 @@ class Feed:
         self.sig_gen = -1
         self.paused = False
         self.filter = TraceFilter()
+        self.filter_gen = None         # the client's number of its filter: trace rows say which filter made them
         self.tick_n = 0
 
     def handle(self, msg: dict) -> None:
@@ -144,6 +145,8 @@ class Feed:
                     self.filter = TraceFilter(msg["filter"])
                 except ValueError:
                     self.filter = TraceFilter()
+            if "gen" in msg:
+                self.filter_gen = msg["gen"]
         elif t == "resync":
             self.row_seq.clear()
 
@@ -196,6 +199,7 @@ class Feed:
         elif len(chans) > 1:
             merged.sort(key=lambda x: x[1][0])
         out["trace"] = [_frame_row(ch, fr) for ch, fr in merged]
+        out["trace_gen"] = self.filter_gen
         out["skipped"] = skipped
         out["paused"] = self.paused
         # events

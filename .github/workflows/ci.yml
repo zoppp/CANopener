@@ -47,9 +47,16 @@ jobs:
         run: |
           $v = python -c "import canopener;print(canopener.__version__)"
           if ("v$v" -ne "${{ github.ref_name }}") { throw "tag ${{ github.ref_name }} does not match version $v" }
+      - name: Release notes from CHANGELOG.md
+        shell: pwsh
+        run: |
+          $v = python -c "import canopener;print(canopener.__version__)"
+          python tools/bump_version.py --notes $v > release-notes.md
+          if ($LASTEXITCODE -ne 0) { throw "CHANGELOG.md has no section for $v" }
       - name: Build
         shell: pwsh
         run: ./packaging/build.ps1 -OutDir dist -Python python
       - uses: softprops/action-gh-release@v2
         with:
           files: dist/canopener-*-win64.zip
+          body_path: release-notes.md

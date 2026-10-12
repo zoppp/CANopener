@@ -134,12 +134,25 @@
       list.appendChild(div);
       if (level === "warn" || level === "error") CO.toast(text, "warn");
     }
-    while (list.children.length > 500) list.firstChild.remove();
-    list.scrollTop = list.scrollHeight;
+    while (list.children.length > 500) list.firstChild.remove();       // always bounded, even during a selection
+    if (!CO.selecting(list)) list.scrollTop = list.scrollHeight;       // the user is selecting text: no scrolling
     if (CO.$("#events").hidden) { unseen += evs.length; const b = CO.$("#event-badge"); b.hidden = false; b.textContent = unseen; }
   }
   CO.$("#btn-events").onclick = () => { const d = CO.$("#events"); d.hidden = !d.hidden; if (!d.hidden) { unseen = 0; CO.$("#event-badge").hidden = true; } };
   CO.$("#btn-events-close").onclick = () => (CO.$("#events").hidden = true);
+  CO.onContextMenu(CO.$("#events-list"), () => [{ label: "Copy the whole log", action: () => CO.copyText(CO.$$("#events-list > div").map((d) => d.textContent).join("\n"), "log") }]);
+  CO.onContextMenu(CO.$("#chips"), (ev) => {
+    const chip = ev.target.closest(".chip"), b = chip && chip.querySelector("[data-dc]");
+    if (!b) return null;
+    const c = CO.state.channels.find((x) => x.index === +b.dataset.dc);
+    if (!c) return null;
+    return [
+      c.state !== "file" && { label: "Reconnect...", action: () => CO.openConnect(c.index) },
+      { label: c.state === "file" ? "Close" : "Disconnect", action: () => CO.disconnect(c.index) },
+      { separator: true },
+      { label: "Copy", action: () => CO.copyText(`${c.name} ${chip.querySelector(".muted").textContent.replace(/\s+/g, " ").trim()}`, "channel") },
+    ];
+  });
 
   CO.onFeed((msg) => {
     if (msg.type) { renderStatus(); return; }

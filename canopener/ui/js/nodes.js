@@ -71,6 +71,23 @@
       <details><summary>raw ids</summary><span class="mono">${scan.raw_ids.join(" ")} ${scan.raw_ext_ids.join(" ")}</span></details></div>`;
   }
 
+  function nodeMenu(ev) {
+    const tr = ev.target.closest("tr[data-node]");
+    if (!tr || !scan) return null;
+    const n = scan.nodes.find((x) => x.node_id === +tr.dataset.node);
+    if (!n) return null;
+    const ident = `node ${n.node_id}${n.device_name ? " " + n.device_name : ""}: vendor ${hex8(n.vendor_id)}, product ${hex8(n.product_code)}, revision ${hex8(n.revision_number)}, serial ${hex8(n.serial_number)}`;
+    return [
+      { label: "Set ID...", disabled: n.recipe_method === "readonly", action: () => setIdDialog(n.node_id) },
+      { label: "Bit rate...", disabled: n.baud === "none", action: () => baudDialog(n.node_id) },
+      { label: "Use in the custom sequence", action: () => useNode(n.node_id) },
+      { separator: true },
+      { label: "Copy identity", action: () => CO.copyText(ident, "identity") },
+      { label: "Copy row", action: () => CO.copyText(CO.tableText([tr]), "1 row") },
+      { label: "Copy table", action: () => CO.copyText(CO.tableText(CO.$$("tr[data-node]", tr.closest("tbody"))), `${scan.nodes.length} rows`) },
+    ];
+  }
+
   async function setIdDialog(node) {
     const n = scan.nodes.find((x) => x.node_id === node);
     const rec = await CO.api("/api/nodes/recipes");
@@ -117,8 +134,11 @@
     CO.$("#nd-job-head", tabEl).innerHTML = `${CO.esc(job.title)} ${state} ${job.error ? `<span class="small" style="color:var(--bad)">${CO.esc(job.error)}</span>` : ""}`;
     CO.$("#nd-stop", tabEl).hidden = job.state !== "running";
     const log = CO.$("#nd-joblog", tabEl);
-    log.textContent = jobLines.join("\n");
-    log.scrollTop = log.scrollHeight;
+    // new lines are appended, not the whole text replaced, so a selection in the log survives a running job
+    if (log._job !== jobId || log._n > jobLines.length) { log.textContent = jobLines.join("\n"); log._job = jobId; }
+    else if (jobLines.length > log._n) log.append((log._n ? "\n" : "") + jobLines.slice(log._n).join("\n"));
+    log._n = jobLines.length;
+    if (!CO.selecting(log)) log.scrollTop = log.scrollHeight;
     if (job.state !== "running" && job.result) {
       const r = job.result;
       if (job.kind === "scan" && r.nodes) { scan = r; renderScan(); }
@@ -261,6 +281,21 @@
     if (r) CO.toast(`Saved to ${r.path}`, "good");
   }
 
+  /* For plugins: put steps into the custom sequence editor and show it. Nothing is sent: the user still previews
+     and confirms. Asks before replacing steps that are already there. Resolves false when the user says no. */
+  CO.openCustomSequence = async ({ steps: newSteps, vars: newVars, title }) => {
+    if (steps.length && !(await CO.confirm("Replace the custom sequence?", `<p>The custom sequence editor has ${steps.length} step(s). Replace them with ${CO.esc(title || "the new steps")} (${(newSteps || []).length} step(s))?</p>`, "Replace"))) return false;
+    steps = JSON.parse(JSON.stringify(newSteps || []));
+    vars = { ...(newVars || {}) };
+    saveEditor();
+    CO.show("nodes");
+    renderEditor();
+    const cs = tabEl && CO.$("#cs", tabEl);
+    if (cs) cs.scrollIntoView({ behavior: "smooth" });
+    CO.toast(`${title || "Steps"}: check them, then Preview & run`, "good");
+    return true;
+  };
+
   // ---------------------------------------------------------------- tab
   CO.registerTab({
     id: "nodes", title: "Nodes (CANopen)", order: 50,
@@ -292,6 +327,8 @@
         const node = +b.closest("tr").dataset.node;
         if (b.dataset.act === "setid") setIdDialog(node); else if (b.dataset.act === "baud") baudDialog(node); else useNode(node);
       });
+      CO.onContextMenu($("#nd-nodes"), nodeMenu);
+      CO.onContextMenu($("#nd-joblog"), () => [{ label: "Copy the whole log", action: () => CO.copyText(jobLines.join("\n"), `${jobLines.length} lines`) }]);
       $("#cs-tpl").onchange = (e) => { const t = TEMPLATES[e.target.value]; if (!t) return; steps = JSON.parse(JSON.stringify(t.steps)); vars = { ...t.vars, ...Object.fromEntries(Object.entries(vars).filter(([k]) => k in t.vars && vars[k] !== "")) }; e.target.value = ""; saveEditor(); renderEditor(); };
       $("#cs-add").onclick = () => { steps.push({ op: "sdo_write", node: "$OLD_ID", index: "0x2100", sub: 0, type: "u8", value: "$NEW_ID" }); saveEditor(); renderEditor(); };
       $("#cs-clear").onclick = () => { steps = []; saveEditor(); renderEditor(); };

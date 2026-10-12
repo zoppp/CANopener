@@ -75,7 +75,7 @@ def test_record_and_list(client):
 
 def test_example_plugin_loads_and_sees_heartbeats(client):
     pl = client.get("/api/plugins").json()
-    assert [e["id"] for e in pl["extensions"]] == ["heartbeat-monitor"] and not pl["errors"]
+    assert sorted(e["id"] for e in pl["extensions"]) == ["eds-editor", "heartbeat-monitor", "sniffer"] and not pl["errors"]
     time.sleep(1.2)
     nodes = client.get("/api/x/heartbeat-monitor/nodes").json()["nodes"]
     assert {n["node"] for n in nodes} >= {5, 10, 20}

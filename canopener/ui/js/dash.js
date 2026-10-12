@@ -632,6 +632,18 @@
       $("#db-edit", el).onclick = () => { editing = !editing; build(); };
       $("#db-add", el).onclick = addWidget;
       $("#db-quick", el).onclick = () => quickSignals();
+      CO.onContextMenu($("#db-grid", el), (ev) => {
+        const wel = ev.target.closest(".dash-w"), view = wel && views.find((v) => v.el === wel);
+        if (!view) return null;
+        const w = view.w, unit = w.unit || (sigInfo[w.key] || {}).unit || "";
+        const keys = w.key ? [w.key] : w.type === "plot" ? (w.series || []).map((s) => s.key) : [w.x_key, w.y_key].filter(Boolean);
+        return [
+          w.key && { label: "Copy value", action: () => CO.copyText(fmtValue(sigValue(w.key), w.format) + (unit ? " " + unit : ""), "value") },
+          keys.length > 0 && { label: keys.length > 1 ? "Copy signal names" : "Copy signal name", action: () => CO.copyText(keys.join("\n"), keys.length > 1 ? `${keys.length} names` : "signal name") },
+          { separator: true },
+          { label: "Widget settings...", action: () => configure(w) },
+        ];
+      });
       // plots read the theme colours when they are created: rebuild on a theme switch
       new MutationObserver(() => { if (active) build(); }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
     },

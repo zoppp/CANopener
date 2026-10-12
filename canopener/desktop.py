@@ -119,6 +119,24 @@ def wait_ready(port: int, thread: threading.Thread, timeout: float = 30.0) -> bo
     return False
 
 
+def _enable_edit_menu(window) -> None:
+    """pywebview switches WebView2's own right-click menu off unless debug is on (its SHOW_DEFAULT_MENUS setting
+    only works on macOS). Switch it back on so text fields get Cut / Copy / Paste; the UI suppresses the menu
+    everywhere else (core.js)."""
+    if sys.platform != "win32":                  # only the Windows (WebView2) window needs this
+        return
+    try:
+        from System import Func, Type
+
+        form = window.native
+
+        def enable():
+            form.webview.CoreWebView2.Settings.AreDefaultContextMenusEnabled = True
+        form.Invoke(Func[Type](enable))
+    except Exception:
+        log.warning("cannot enable the text field menu", exc_info=True)
+
+
 def open_window(title: str, url: str, on_closing=None) -> bool:
     """Show the UI in a native window and block until it is closed. False if no window could be shown."""
     try:
@@ -134,8 +152,10 @@ def open_window(title: str, url: str, on_closing=None) -> bool:
         return renderer_ok[-1]                     # False cancels the window: MSHTML cannot run the UI
     try:
         webview.settings["ALLOW_DOWNLOADS"] = True     # CSV/sequence export and recording downloads (Save dialog)
-        w = webview.create_window(title, url, width=1440, height=900, min_size=(960, 600))
+        # text_select: pywebview otherwise puts user-select: none on the whole page (no mouse text selection)
+        w = webview.create_window(title, url, width=1440, height=900, min_size=(960, 600), text_select=True)
         w.events.initialized += initialized
+        w.events.loaded += lambda: _enable_edit_menu(w)
         if on_closing is not None:
             w.events.closing += on_closing
         storage = os.path.join(os.environ.get("LOCALAPPDATA") or str(app_dir()), "CANopener", "webview")

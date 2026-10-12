@@ -1,11 +1,15 @@
 # CANopener user guide
 
-CANopener is an open-source CAN engineering toolbox for Windows (and, from source, Linux). It does what
-PCAN-View does (receive list, transmit list, trace, record and replay, bus statistics) for many adapters, and
-adds CANopen node commissioning, DBC / CANopen / J1939 decoding, dashboards, plugins and an MCP endpoint, so
-Claude can read the bus and, with your approval, act on it.
+CANopener is an open-source CAN engineering toolbox for Windows (running it from source on Linux has not been
+tried yet). It is built to replace PCAN-View (receive list, transmit list, trace, record and replay, bus
+statistics) with many adapters, and adds CANopen node commissioning, DBC / CANopen / J1939 decoding, dashboards,
+plugins and an MCP endpoint, so Claude can read the bus and, with your approval, act on it.
 
-Everything in this guide can be tried without hardware: CANopener has a built-in simulator with three made-up
+CANopener has not yet been tested with real adapters or devices: everything so far was tested on its virtual bus
+and simulator. The [Adapters](#adapters) table shows what has been confirmed. Where this guide describes how an
+adapter or a real bus behaves, read it as what CANopener asks the driver for, until a test confirms it.
+
+Most of this guide can be tried without hardware: CANopener has a built-in simulator with three made-up
 CANopen devices and some J1939 traffic. All screenshots were taken with it (plus a DBC file, an EDS file and a
 few transmit entries).
 
@@ -16,21 +20,24 @@ few transmit entries).
 1. [Getting started](#getting-started)
 2. [Connecting adapters](#connecting-adapters)
 3. [The screen](#the-screen)
-4. [Receive / Transmit](#receive--transmit)
-5. [Trace](#trace)
-6. [Record & Replay](#record--replay)
-7. [Statistics](#statistics)
-8. [Nodes (CANopen)](#nodes-canopen)
-9. [Decode: DBC, CANopen, J1939](#decode-dbc-canopen-j1939)
-10. [Dashboards](#dashboards)
-11. [Projects and settings](#projects-and-settings)
-12. [Task walkthroughs](#task-walkthroughs)
-13. [Claude (MCP)](#claude-mcp)
-14. [Plugins](#plugins)
-15. [Command line](#command-line)
-16. [Files and folders](#files-and-folders)
-17. [Troubleshooting](#troubleshooting)
-18. [FAQ](#faq)
+4. [Selecting, copying and right-click menus](#selecting-copying-and-right-click-menus)
+5. [Receive / Transmit](#receive--transmit)
+6. [Trace](#trace)
+7. [Record & Replay](#record--replay)
+8. [Statistics](#statistics)
+9. [Nodes (CANopen)](#nodes-canopen)
+10. [Decode: DBC, CANopen, J1939](#decode-dbc-canopen-j1939)
+11. [EDS editor](#eds-editor)
+12. [Sniffer](#sniffer)
+13. [Dashboards](#dashboards)
+14. [Projects and settings](#projects-and-settings)
+15. [Task walkthroughs](#task-walkthroughs)
+16. [Claude (MCP)](#claude-mcp)
+17. [Plugins](#plugins)
+18. [Command line](#command-line)
+19. [Files and folders](#files-and-folders)
+20. [Troubleshooting](#troubleshooting)
+21. [FAQ](#faq)
 
 ## Getting started
 
@@ -42,13 +49,13 @@ few transmit entries).
 3. Double-click `canopener.exe`. The app opens in its own window.
 
 The first time, Windows SmartScreen may say "Windows protected your PC", because the exe is not signed. Click
-**More info**, then **Run anyway**. This happens once per downloaded version.
+**More info**, then **Run anyway**.
 
 CANopener runs as a small local server with the window on top. Double-clicking `canopener.exe` again opens a
 second window onto the same running CANopener, so both windows show the same bus. There is only ever one
 CANopener per PC and port.
 
-The window needs the Microsoft Edge WebView2 runtime, which Windows 10 and 11 already have. Without it,
+The window needs the Microsoft Edge WebView2 runtime, which Windows 10 and 11 usually have. Without it,
 CANopener opens in your web browser instead.
 
 ### Your first connection
@@ -85,8 +92,8 @@ The virtual bus exists only inside CANopener. It is not visible to other program
 
 ### Closing
 
-Closing the first CANopener window stops every cyclic transmit and a running replay, then finishes a running
-recording, saves the settings and closes the adapters: nothing keeps sending after CANopener has closed. A second
+Closing the first CANopener window saves the settings, stops every cyclic transmit and a running replay,
+finishes a running recording and closes the adapters: nothing keeps sending after CANopener has closed. A second
 window (started while CANopener runs) only looks at the same CANopener; it closes when the first one does.
 
 Without the WebView2 runtime CANopener opens in your browser instead; closing the browser does not stop it. Click
@@ -106,7 +113,7 @@ The **Connect an adapter** dialog:
 - **Bit rate**: the nominal bit rate, 10 kbit/s to 1 Mbit/s. A rate the adapter's driver cannot do is refused
   with a message that lists the rates it can do. It is never silently replaced by another rate.
 - **CAN FD** and **FD data bit rate**: only for interfaces that support CAN FD.
-- **Listen-only**: the adapter never acknowledges or transmits frames. See below.
+- **Listen-only**: CANopener opens the adapter in its listen-only (silent) mode. See below.
 - **Start simulated devices on this virtual bus**: only for the Virtual interface.
 
 The dialog shows which channel the adapter will open as (**CAN1**, **CAN2**, ...). Your choices are remembered
@@ -114,29 +121,52 @@ and filled in next time.
 
 ### Adapters
 
-| Adapter | Interface | Channel | Notes |
-|---|---|---|---|
-| PEAK PCAN-USB | PEAK PCAN-USB | `PCAN_USBBUS1`, `PCAN_USBBUS2`, ... | Needs the PEAK driver (installing PCAN-View installs it). Listen-only and CAN FD. |
-| Kvaser | Kvaser | `0`, `1`, ... | Needs the Kvaser driver. Listen-only (silent mode) and CAN FD. The "Kvaser Virtual CAN Driver" channels are a loopback pair for testing. The Statistics tab also shows the adapter's own bus load figure. |
-| CANable with slcan firmware | CANable / slcan (COM port) | the COM port, for example `COM5` | No driver needed. Listen-only. CAN FD on a CANable 2, with a data bit rate of 2 or 5 Mbit/s only. Clones that keep the chip maker's USB id are detected as "STM32 virtual COM port". |
-| CANable with candleLight firmware | CANable / candleLight (USB) | `0` | A USB device; libusb is included. If it is not detected, bind the WinUSB driver to it once with Zadig. Classic CAN only, no listen-only. |
-| Vector | Vector | the driver's global channel index, `0`, `1`, ... | Needs the Vector driver library. Nothing has to be set up in the Vector hardware configuration first. Listen-only and CAN FD. |
-| IXXAT | IXXAT | `0`, `1`, ... | Needs the IXXAT VCI driver. CAN FD; no listen-only. |
-| Linux SocketCAN | Linux SocketCAN | `can0`, ... | Linux only (from source). Set the bit rate in the operating system (`ip link`); the bit rate field is disabled. |
-| Virtual | Virtual (no hardware) | any name, default `canopener` | A bus inside CANopener for trying things and for tests. |
+**Tested** says whether the adapter has been confirmed working with CANopener on a real bus. The notes say what
+CANopener asks each driver for (listen-only, CAN FD); for an untested adapter that is not yet confirmed. If you
+use one of them, a report of what works and what does not helps (an issue on the project's GitHub page).
 
-Which CANable firmware do you have? If the board shows up in Device Manager as a COM port, it runs slcan. If it
-shows up as a USB device (or as an unknown device), it runs candleLight. Both work; slcan needs no driver
-setup, candleLight is faster on a busy bus.
+| Adapter | Interface | Channel | Tested | Notes |
+|---|---|---|---|---|
+| PEAK PCAN-USB | PEAK PCAN-USB | `PCAN_USBBUS1`, `PCAN_USBBUS2`, ... | Not yet | Needs the PEAK driver. Listen-only and CAN FD. |
+| Kvaser | Kvaser | `0`, `1`, ... | Not yet | Needs the Kvaser driver. Listen-only (silent mode) and CAN FD. |
+| CANable with slcan firmware | CANable / slcan (COM port) | the COM port, for example `COM5` | Not yet | Listen-only. CAN FD (CANable 2) with a data bit rate of 2 or 5 Mbit/s only. |
+| CANable with candleLight firmware | CANable / candleLight (USB) | `0` | Not yet | A USB device; libusb is included. Classic CAN only, no listen-only. |
+| Vector | Vector | the driver's global channel index, `0`, `1`, ... | Not yet | Needs the Vector driver library. Listen-only and CAN FD. |
+| IXXAT | IXXAT | `0`, `1`, ... | Not yet | Needs the IXXAT VCI driver. CAN FD; no listen-only. |
+| Linux SocketCAN | Linux SocketCAN | `can0`, ... | Not yet | Linux only (from source). Set the bit rate in the operating system (`ip link`); the bit rate field is disabled. |
+| Virtual | Virtual (no hardware) | any name, default `canopener` | Yes (the test suite runs on it) | A bus inside CANopener for trying things and for tests. |
 
-The **Bit rate** list offers 10, 20, 50, 83.3, 100, 125, 250, 500, 800 and 1000 kbit/s. Not every driver can run
-every one of them: slcan has no 800 kbit/s and IXXAT no 83.3 kbit/s, and CANopener says so when you connect.
-PEAK, Kvaser, Vector and candleLight run every listed rate.
+A CANable runs one of two firmwares: slcan boards normally show up in Device Manager as a COM port, candleLight
+boards as a USB device. CANopener has a backend for each.
+
+The **Bit rate** list offers 10, 20, 50, 83.3, 100, 125, 250, 500, 800 and 1000 kbit/s. CANopener refuses a rate
+that a backend's driver does not list (slcan has no 800 kbit/s, IXXAT no 83.3 kbit/s) and says so when you
+connect. Whether each adapter really runs every rate it accepts has not been tested yet.
+
+### More adapters (help wanted)
+
+We are working on support for cheaper and wireless adapters, as plugins shipped with CANopener. None of it is
+available yet, and nothing here is a recommendation: we do not have the hardware to test these devices. The
+plan:
+
+- **ESP32 boards running GVRET firmware** (ESP32RET and other SavvyCAN-compatible devices), over USB and WiFi.
+- **slcan over WiFi** (TCP), for devices that speak the same protocol as a CANable, such as WiCAN.
+- **ELM327 and OBDLink OBD-II dongles**, over USB, Bluetooth and WiFi, as bus monitors. The Linux kernel's
+  [ELM327 driver documentation](https://docs.kernel.org/networking/device_drivers/can/can327.html) notes that a
+  busy bus can overflow the chip's buffer ("BUFFER FULL") and that clones do not all implement every feature. We
+  have not measured this ourselves.
+
+New adapter types will open listen-only by default.
+
+CANopener is open source, so you can help. If you own one of these devices and can test, or want to write or
+improve support for it, open an issue on the project's GitHub page and say which device and firmware you have.
+A device joins the table above only after it has been tested.
 
 ### Listen-only
 
-A listen-only adapter never sends anything onto the bus, not even the acknowledge bit. Use it to watch a live
-machine without any chance of disturbing it.
+In listen-only (silent) mode an adapter should send nothing onto the bus, not even the acknowledge bit, so you
+can watch a live machine without disturbing it. CANopener asks the driver for this mode; that the adapters
+really stay silent has not been confirmed on hardware yet.
 
 On a listen-only channel nothing is transmitted: sending and node changes are refused, cyclic entries stop, a
 replay onto it sends nothing (each frame counts as a send error), and a node scan only listens.
@@ -148,7 +178,8 @@ acknowledges is repeated by its sender and shows as errors. At least one other n
 
 Tick **CAN FD** and choose the **FD data bit rate**. The nominal bit rate stays the arbitration rate. Received
 FD frames show as type **FD** (or **FD BRS** with bit rate switching) in the receive list and the trace. To
-send FD frames, tick **CAN FD** (and **Bit rate switch** if wanted) in the transmit entry.
+send FD frames, tick **CAN FD** (and **Bit rate switch** if wanted) in the transmit entry. CAN FD has not yet
+been tested with FD hardware.
 
 ### Several channels
 
@@ -158,7 +189,8 @@ next free channel (CAN2, CAN3, ...) and gets its own chip and its own part of th
 - The receive list shows a **Ch** column as soon as more than one channel is connected; the trace always has
   one. Both have a channel selector. Statistics shows one card per channel.
 - A transmit entry has a **Channel**.
-- A recording records every connected channel.
+- A recording records every channel that is connected when it starts. A channel connected later is not added
+  to a running recording.
 
 The **×** on a chip disconnects that channel.
 
@@ -170,7 +202,7 @@ The **×** on a chip disconnects that channel.
 - **Tabs**: Receive / Transmit, Trace, Record & Replay, Statistics, Decode, Dashboards, Nodes (CANopen), the
   tabs of plugins (the shipped example adds **Heartbeats**), and Plugins.
 - **Status bar**: per channel the bus load bar and percentage, frames per second, the bus state when it is not
-  ACTIVE (warning, passive, bus off), and error counters (error frames / receive errors / send errors). **Log**
+  ACTIVE (warning, passive, bus off) and the driver reports it, and error counters (error frames / receive errors / send errors). **Log**
   opens the event log; its badge counts new events.
 
 The **event log** lists what happened: connects and disconnects, adapter errors, recordings, node jobs.
@@ -180,6 +212,69 @@ The **About** box (**?**) shows the version, the app folder, the MCP address for
 a **User guide** button that opens this guide.
 
 ![The About box with the User guide button](img/about.png)
+
+## Selecting, copying and right-click menus
+
+The lists (receive list, transmit list, trace, recordings, busiest IDs, heartbeats) select whole rows. The
+selection stays while the list keeps updating, and while you hold the mouse button the receive list, busiest
+IDs and heartbeats do not redraw.
+
+| Do this | It does |
+|---|---|
+| Click a row | Selects it. |
+| Shift+click | Selects every row from the last clicked one to this one. |
+| Ctrl+click | Adds the row to the selection, or takes it out. |
+| Drag over rows with the mouse | Selects the rows you pass. Hold the mouse above or below the list and it scrolls. |
+| Ctrl+A | Selects every row shown (click into the list first). |
+| Esc | Clears the selection. |
+| Ctrl+C | Copies the selected rows as text: a header line, then one line per row, the columns as shown, separated by tabs. |
+| Ctrl+V in the transmit list | Pastes frames (see below). |
+| Right-click | The menu for the row (it first selects the row if it was not selected). |
+
+In the trace, clicking or right-clicking a row stops the view from following the newest frames, so the rows
+stay where they are (**Jump to latest** follows again). The selection works while the trace runs and while it
+is paused; rows that drop out of the trace buffer drop out of the selection.
+
+Other text (dialogs, notices, logs, the Decode tables, the statistics cards) can be selected with the mouse as
+usual; the Decode tables and the statistics cards do not redraw while you select text in them. Right-click on
+selected text offers **Copy**.
+
+What the right-click menus offer:
+
+| Where | Menu |
+|---|---|
+| Receive list | Copy rows, Copy ID(s), Copy data (hex), Add to transmit list (opens the transmit dialog filled in), Show only this ID in the trace, Hide this ID in the trace, Freeze / Unfreeze view, Select all. |
+| Transmit list | Send once, Edit, Duplicate, Start / Stop cyclic (for entries with a cycle time), Delete (several entries: after a question), Copy rows, Paste frames, Select all. On the empty part of the list: New entry, Paste frames, Stop all cyclic. |
+| Trace | Copy rows, Copy as .trc lines (PCAN-View .trc 1.1 rows), Copy ID(s), Copy data (hex), Show only this ID, Hide this ID, Clear the ID filter, Add to transmit list, Pause / Resume, Select all. |
+| Recordings | Open, Replay, Download, Copy file name, Copy full path, Copy rows. |
+| Statistics, Busiest IDs | Copy rows, Copy ID(s), Show only this ID in the trace, Hide this ID in the trace. |
+| Nodes, scan result | Set ID, Bit rate, Use in the custom sequence, Copy identity (vendor, product, revision, serial), Copy row, Copy table. |
+| Nodes, job log; event log | Copy the whole log. |
+| Decode tables | Copy value, Copy row, Copy table; on object dictionary rows also Read from the node (an SDO read, like the Read button). |
+| Dashboards, a widget | Copy value (numeric tile, gauge, lamp), Copy signal name(s), Widget settings. |
+| Heartbeats | Copy rows, Copy node ID(s), Show only this heartbeat in the trace. |
+| A channel chip | Reconnect, Disconnect (or Close for a file), Copy. |
+| EDS editor, object tree and sub-index table | Copy index, Copy name, Copy value, Copy as rows, Open in the PDO editor (PDO objects), Add a sub-index, Delete the sub-index or object. |
+| EDS editor, problems | Go to the object, Copy problem, Copy all problems. |
+| EDS editor, PDO list | Edit, Copy COB-ID, Copy the mapping (the encoded entries), Delete. |
+| Sniffer, an id | Details and candidates, Copy ID, Copy data, Copy row, Copy all rows shown, Show only / Hide this ID in the trace, Add to transmit list, Notch. |
+| Sniffer, a candidate | Make a quick signal, DBC lines, Copy bit range (DBC notation), Copy value now. |
+
+"Show only" and "Hide" set the trace's ID filter (hiding adds to the IDs already hidden) and empty the trace,
+like any filter change.
+
+**Paste frames** into the transmit list: click into the transmit list and press **Ctrl+V**, or use **Paste
+frames** in its menu. It reads lines of an ID and data bytes, for example `18FEF100 FF 80 20 00 00 00 00 FF`,
+candump lines (`123#1122`, `123#R`, `(1.5) can0 123#1122`), `.trc` rows (versions 1.0, 1.1 and 2.x, as CANopener
+records them), or rows copied from the receive list, trace or transmit list. A line whose DLC does not match its
+bytes is listed as not understood. A dialog lists the frames
+(and the lines it did not understand) and asks for a channel for frames without one; **Add** adds them as manual
+entries without a cycle time. Nothing is sent until you click **Send**. If the menu item cannot read the
+clipboard (the browser does not allow it), it says so: press **Ctrl+V** in the list instead.
+
+Checked in a browser and in the desktop window: the row selection, Ctrl+C, the right-click menus, the Cut / Copy
+/ Paste menu of text fields and **Paste frames** from the menu. Rows copied with Ctrl+C paste into Excel with
+the columns in place.
 
 ## Receive / Transmit
 
@@ -283,11 +378,15 @@ recording. Use **Record** for long captures.
 2. Choose the **Format**.
 3. Click **Start recording**.
 
-Every connected channel is recorded, received and sent frames, by a writer thread of its own, so a busy bus
-does not drop frames. The card shows the file, the frames written, the duration and the size; the top bar
+Every channel connected when the recording starts is recorded, received and sent frames, by a writer thread of its own. In the tests it
+recorded every frame at more than 8 000 frames per second on the virtual bus (about a full 1 Mbit/s bus); it has
+not yet been measured on a real bus. The card shows the file, the frames written, the duration and the size; the top bar
 shows **REC**. **Stop** finishes the file.
 
 An existing file is never overwritten: `-1`, `-2` ... is added to the name instead.
+
+The formats are written to their published layouts and read back by CANopener in the tests; opening the files
+in PCAN-View, Vector tools or candump has not been tried yet.
 
 | Format | Use |
 |---|---|
@@ -343,10 +442,11 @@ shows the progress, with **Pause** / **Resume** and **Stop**.
 One card per channel:
 
 - **State**: open, error or file, and the bus state (ACTIVE, warning, passive, bus off).
-- **Bus load**: now and peak, estimated from the frames (with Kvaser also the adapter's own figure).
+- **Bus load**: now and peak, estimated from the frames.
 - **Frames/s**: now and peak.
 - **Received**, **Transmitted**.
-- **Error frames** (and per second), **Receive / send errors**, adapter overruns.
+- **Error frames** (and per second), **Receive / send errors**, adapter overruns, as far as the driver reports
+  them.
 - **Distinct IDs**, and how long the channel has been **Connected**.
 
 The chart shows bus load and frame rate over the last 10 minutes.
@@ -359,7 +459,8 @@ transfers, NMT commands) are left out.
 
 This tab finds the CANopen nodes on a channel and changes their node ID or bit rate. Every change is a *plan*:
 you first see every frame that will be sent, tick a box, and only then is anything sent. Every scan, plan and
-run is written to `logs\nodes.log`.
+run from this tab is written to `logs\nodes.log` (scans from the command line are not logged; their plans and
+runs are).
 
 ![Nodes after a scan](img/nodes.png)
 
@@ -433,7 +534,8 @@ devices...** switches every LSS device on the bus at once. The dialog asks for:
 
 The preview shows the frames as for Set ID. The sequence is configure, store, then activate. After the switch
 the adapter reopens at the new rate and waits for traffic. Nodes that did not switch stay at the old rate and
-are no longer heard; the preview warns about this.
+are no longer heard; the preview warns about this. Bit-rate changes have been tested on the simulator only, not
+yet on a real device.
 
 The button is disabled for a node whose recipe has no bit-rate method (use the custom mode).
 
@@ -546,6 +648,202 @@ Tick **J1939 decoding on** for each channel that carries J1939. Then:
 | J1939 DM1 | `j1939/<SA>/DM1.ActiveDTCs` (number of active DTCs) |
 | Quick signal | `raw/<name>` |
 
+## EDS editor
+
+The **EDS editor** tab creates, opens, checks and saves CANopen device descriptions: EDS files, and DCF files
+(an EDS plus the values for one node). It also compares a file with a node on the bus, and builds an EDS for a
+device that came without one. It comes as a plugin and is part of the release.
+
+Everything that talks to a node (compare, read PDOs, create from a node, write a DCF) has been tested against
+the simulator and other CANopen SDO servers on the virtual bus, not yet against a real device.
+
+![The EDS editor: object tree, the TPDO 3 mapping of a CiA 402 drive, problems](img/eds-editor.png)
+
+**Toolbar:**
+
+| Button | Does |
+|---|---|
+| **New** | Starts from a template: a CiA 301 device (the communication objects, 4 RPDOs and 4 TPDOs), CiA 401 generic I/O, or a CiA 402 drive, with the usual default PDO mapping. Type the vendor and product. |
+| **Open** | Opens an EDS, DCF or XDD/XDC file: from the list (the `eds` and `decode` folders next to `canopener.exe`), by path, or by upload. XDD files are saved as EDS. |
+| **Save**, **Save as** | Saves into the `eds` folder next to `canopener.exe`, as EDS or DCF. |
+| **Download** | A copy to keep somewhere else. |
+| **EDS / DCF** | DCF shows the value fields (ParameterValue) and the commissioning section (node id, bit rate). |
+| **To decoder** | Saves the file and assigns it to a node in **Decode > CANopen**. |
+| **Compare with node** | Reads the node (see below). |
+| **Create from node** | Builds an EDS from what a node answers (see below). |
+| **To Nodes** | Turns the DCF values into steps in the Nodes tab (see below). |
+
+**Editing.** The tree on the left groups the objects: communication (1000-1FFF), manufacturer (2000-5FFF),
+device profile (6000-9FFF). Type in the filter to find an index or a name. Click an object to edit it on the
+right: index, name, object type (VAR, ARRAY, RECORD), data type, access, default value, limits and whether it can
+be mapped into a PDO. For an ARRAY or RECORD the sub-indices are a table; **+ sub-index** adds one and keeps
+sub-index 0 (the highest sub-index) right. **+** next to the filter adds an object. **File and device info** at
+the top of the tree holds the file and device data, the bit rates and the comments.
+
+Values are typed as in the file: `0`, `0x1F`, `010` (octal, as CiA 306 says), or `$NODEID+0x180` for values that
+depend on the node id.
+
+**PDO mappings.** A mapping object (1600-17FF for RPDOs, 1A00-1BFF for TPDOs) shows its entries and the bits
+used, and **Open in the PDO editor** takes you to the PDO editor below.
+
+**Problems.** The list at the bottom is checked after every change. Click a problem to go to the object. It
+finds, among others:
+
+- missing mandatory objects (1000, 1001, 1018), unknown data types and access types;
+- values that are not valid for their data type or are outside their limits;
+- a sub-index 0 that does not match the sub-indices;
+- PDO mappings longer than 64 bits, mapped objects that do not exist, are not PDO-mappable, have another size,
+  or have the wrong access (an RPDO needs a writable object);
+- two PDOs with the same COB-ID;
+- DeviceInfo numbers that differ from the identity object (1018).
+
+**What is kept.** Keys and sections the editor does not know (vendor tool settings, `ObjFlags` and so on) are
+written back unchanged, so fixing one value in a vendor's EDS does not lose the rest. Objects written in the
+compact form (`CompactSubObj`) are written out as normal sub-indices.
+
+### PDO editor
+
+**PDOs** at the top of the tree lists every RPDO and TPDO of the file, decoded: COB-ID, on or off, transmission
+type, bits mapped and the mapped objects. Click one to edit it. In a DCF the editor shows and changes the DCF
+values; in an EDS, the defaults.
+
+![The PDO editor: all PDOs, and TPDO 3 with its frame layout](img/eds-pdo.png)
+
+**Communication** (object 1400+ for RPDOs, 1800+ for TPDOs):
+
+- **COB-ID** as stored, for example `$NODEID+0x180`, and decoded: the CAN id, and the flags **enabled** (bit 31
+  clear), **node relative** (the CAN id is added to the node id), **29-bit** (bit 29) and **RTR allowed** (bit 30
+  clear). Change either side: the flags rewrite the stored value, and a typed value updates the flags. With a node
+  id in the DCF commissioning section, the id on the bus is shown for that node, and **node relative** rewrites
+  the same id with or without the node id (without a node id it asks you to type the COB-ID). An 11-bit id stops
+  at 7FF; tick **29-bit** for longer ones. A PDO with CAN id 0 cannot be enabled.
+- **Transmission type** in words: 0 synchronous acyclic, 1-240 every n-th SYNC, 252/253 RTR only (TPDOs),
+  254/255 event-driven.
+- For TPDOs **inhibit time** (in 100 µs units, also shown in ms) and **SYNC start value**; for both the **event
+  timer** (ms; for an RPDO the deadline). A parameter the object does not have shows **+ add**: adding it changes
+  the device description (the file then says the device has it), so the editor asks first.
+
+**Mapping** (object 1600+ / 1A00+): the frame layout shows which bits of the 8 data bytes each mapped object
+fills, and the free bits. Each entry is listed decoded (object, name, bits, byte.bit where it starts) and encoded,
+as stored in the object dictionary: index (16 bits), sub-index (8) and length in bits (8), so `0x60410010` maps
+0x6041:00 with 16 bits.
+
+- **Map an object** lists the PDO-mappable objects with the right access (readable for a TPDO, writable for an
+  RPDO).
+- **Gap (dummy)**, for RPDOs, leaves bits unused (dummy objects 0001-0007); the file's `[DummyUsage]` is set to
+  allow it.
+- Type an encoded entry (**Entry**, or edit one in the list) to map something directly; the list decodes it.
+- ↑ ↓ reorder, × removes. The editor keeps the entries and the count (sub-index 0) in step.
+
+**+ RPDO** and **+ TPDO** add the next free PDO (communication and mapping object). PDOs 1-4 get the predefined
+COB-IDs (`$NODEID+0x180` and so on); later ones start disabled until you give them a COB-ID. **Delete** removes
+both objects. **Read PDOs from node** reads the PDO objects that are in the file from a node (SDO reads only)
+and offers to store what the node has as DCF values or defaults, so you see the mapping the node really uses. To
+find PDOs the file does not have, use **Create from node** with the range `1400-1BFF`.
+
+The problem list also catches CAN ids that CiA 301 keeps for other services (NMT, SYNC, EMCY, TIME, SDO,
+heartbeat, LSS) and ids above 7FF for some node id.
+
+### Compare with a node, read its values
+
+**Compare with node** reads every readable object of the file from a node and lists, per object, the file's
+value, the node's value and the status: same, differs, missing (the node does not have it), size (the node sends
+another length), read (the file has no value to compare with) or error. Untick **only differences** to see
+everything. Objects that change by themselves (status words, actual values, the serial number 0x1018:04) differ
+even on a well configured node. When the node stops answering or you press **Stop**, what was read so far is
+kept.
+
+![A file compared with node 5](img/eds-compare.png)
+
+- **Node values into DCF values** stores what the node has as DCF values and switches the file to DCF. Save it as
+  the record of how that node is configured.
+- **Node values into defaults** makes the node's values the file's defaults.
+
+### Create an EDS from a node
+
+**Create from node** asks the node for every index (1000-9FFF, or the hex ranges you type, such as
+`1000-1FFF, 2000-20FF`). On a real node the whole range can take minutes (not yet measured); there is a progress bar and **Stop**. Standard
+objects get their CiA names, data types and access. For the others the data type is guessed from the reply size
+and the access is unknown (CANopener only reads), and each guess is listed under Problems: check them against the
+device's manual. COB-IDs that follow the node id become `$NODEID+...`, so the EDS fits any node id. Stop, or a
+node that stops answering, keeps the objects found so far. A node that answers every index with an error (so
+missing objects cannot be told apart) is noticed, and that range is left out.
+
+### Write a DCF to a node
+
+The editor never writes to a node. **To Nodes** turns the DCF values into steps in the Nodes tab's custom
+sequence editor:
+
+- NMT pre-operational first (PDOs can only be changed there), then the SDO writes, then a store (0x1010:01
+  "save"); each of these can be switched off, and a reset can be added;
+- by default only values that differ from the default;
+- a changed PDO is written the CiA 301 way: disabled (COB-ID bit 31), mapping count 0, the entries, the count,
+  the other parameters, then enabled again. This writes the whole PDO (its COB-ID and all mapping entries, from the
+  file's values) even when only one parameter changed. A PDO that cannot be disabled (its COB-ID is not
+  writable) keeps its mapping;
+- the COB-IDs of SYNC, TIME, EMCY and SDO channels are switched off before their id changes;
+- values of read-only objects, and values that cannot be read as a number of their type, are skipped and
+  listed. A number outside its type's range (for example 70000 for an UNSIGNED16) is not skipped: it shows as an
+  error under Problems, so fix it before writing. Without 0x1010:01 in the file there is no store.
+
+Then use **Preview & run** in the Nodes tab, which shows every frame and asks before sending. The node stays in
+pre-operational (no NMT start), unless you tick the reset.
+
+Device work only sends SDO reads. It runs as a node job: it shows in the Nodes tab, it cannot start while another
+node job runs, and it is logged in `logs\nodes.log`.
+
+## Sniffer
+
+The **Sniffer** tab helps you find what the bytes of unknown frames mean, when there is no DBC or EDS: it shows
+which bits change, and when. It only reads frames; it never sends anything, and your own frames (Tx) are left
+out. It comes as a plugin and starts analysing the first time you open the tab.
+
+![The sniffer: changing bits per id, guesses per byte, candidate signals of 0CF](img/sniffer.png)
+
+**The grid.** One row per id: the count, the cycle time and every byte, in hex and as its 8 bits (bit 7 left, bit
+0 right). A bit lights up when it changes and fades over about 10 seconds, so counters flicker all the time,
+constant bits stay dark and a signal lights up when it moves. Filter by channel and id (`0CF, 18FEF100, 700-77F`),
+hide ids that never change, and sort by id, by the most recent change or by count. **Freeze** stops the view
+(the analysis goes on); **Reset** forgets everything seen so far.
+
+**Notch.** Let the sniffer watch the traffic for a few seconds first (a notch in the first seconds is refused,
+because everything after it would look new). Press **Notch** to hide every bit that has changed so far (they are
+shown hatched). Then do one thing on the machine: press a pedal, flip a switch, move a joystick. The bits that
+change after the notch get a blue outline. **Only new since the notch** shows only the ids with such bits, plus
+ids seen for the first time after the notch (marked **new id**; slow or event frames show up here too). **Clear
+notch** shows everything again.
+
+**Guesses per byte**, under each byte:
+
+| Mark | Means |
+|---|---|
+| CNT | a counter: the byte changes in almost every frame, by the same step |
+| CNT4 | a 4-bit counter in the low nibble (the high nibble does not move) |
+| CHK | a checksum: the XOR, or the sum plus a constant, of the other bytes |
+| const | never changed |
+
+Bytes guessed as counters or checksums never count as new after a notch, because they change all the time
+anyway; a wrong guess can therefore hide a real signal. Only XOR and sum checksums are recognised (not CRCs). The
+guesses come from the frames seen so far and are updated every second, so give them a few seconds of traffic,
+and check them.
+
+**Details and candidates.** Click a row for its details: per byte the value now, the lowest and highest value
+seen, how many different values and changes, and the guess. **Candidates** are the bit ranges that changed (after
+the notch, if there is one; bytes guessed as counters or checksums left out): each run of changed bits in Intel
+and in Motorola bit order, and each group of neighbouring changed bytes byte-aligned in both byte orders, at most
+64 bits each. Each shows the raw value now and the lowest and highest value of its recent changes (the last
+1000 frames of that id in which such bits changed).
+
+- **Quick signal** makes it a quick signal (name, bits, byte order, signed, factor, offset, unit), so you can plot
+  it on a dashboard right away.
+- **DBC line** gives the `BO_`/`SG_` lines to paste into a DBC file (fix the name, scaling, unit and range).
+
+Claude gets `get_sniffer_changes` (what changed, with guesses and candidates; read only) and `set_sniffer_notch`
+(which only changes the sniffer's view, and is refused in the first seconds). So you can ask Claude to notch, do
+the action, and then ask which bits moved.
+
+The sniffer has been tried on the simulator and on made-up frames in the tests, not yet on a real machine.
+
 ## Dashboards
 
 ![A dashboard with a time plot, a gauge, numeric tiles and a lamp](img/dashboards.png)
@@ -655,15 +953,15 @@ receive list and click **To transmit**.
 
 1. Connect the channels you need (listen-only is fine).
 2. On **Record & Replay**, type a **File name**, for example `fault-hunt`, and choose the format your
-   colleague can open: `.trc` for PCAN-View, `.blf` or `.asc` for Vector tools, `.log` for candump, `.csv` for a
-   spreadsheet.
+   colleague uses: `.trc` (PCAN-View), `.blf` or `.asc` (Vector tools), `.log` (candump), `.csv` for a
+   spreadsheet. Opening them in those programs has not been tried yet.
 3. Click **Start recording** before the fault happens. The top bar shows **REC** with the frame count.
 4. When the fault has happened, click **Stop**.
 5. In **Recordings**, click **Download** on the file to save a copy where you want, or take it from the
    `recordings` folder next to `canopener.exe` and attach it to an e-mail.
 
-Missed the start? **Trace** > **Save...** writes the last few minutes the trace buffer still holds (about
-260 000 frames per channel) to a file.
+Missed the start? **Trace** > **Save...** writes what the trace buffer still holds (about 260 000 frames per
+channel; how long that covers depends on the bus load) to a file.
 
 ### Open a recording offline
 
@@ -700,7 +998,8 @@ the next NMT reset instead: Decode > CANopen > **Reset** on node 10.)
 
 1. Scan, then **Set ID...** on the node (for example node 20, recipe `generic-lss`).
 2. The preview selects the device by its identity (switch selective: vendor, product, revision, serial), so
-   only this device is configured even when several LSS devices share the bus. Then configure node id, store,
+   only this device is configured even when several LSS devices share the bus (tested on the simulator, not yet
+   on real devices). Then configure node id, store,
    switch every device back to waiting (an **always** step), NMT reset communication, and the check of the new
    id.
 3. Tick the box and **Run**.
@@ -715,8 +1014,8 @@ The whole bus has to move together. Plan it so you do not lose contact with devi
 
 1. Scan, so CANopener knows the devices and their recipes.
 2. For every LSS device at once: **Bit rate of all LSS devices...**, choose the new rate, **Preview**, check,
-   **Run**. The devices store the new rate and switch after the switch delay; the adapter reopens at the new
-   rate and waits for traffic.
+   **Run**. The devices should store the new rate and switch after the switch delay; the adapter reopens at the
+   new rate and waits for traffic. This has been tested on the simulator only.
 3. For a device with an SDO bit-rate recipe (demo device A): **Bit rate...** on its row. A device that only
    switches after a power cycle (the preview says so) is reached again after you power it and reconnect at the
    new rate.
@@ -787,6 +1086,42 @@ To change a value while it is sending, click **Edit**, change the signal, **Save
 5. **Transport protocol messages** shows every reassembled long message.
 6. Load a J1939 DBC on the DBC view to decode signals by PGN for every source address.
 
+### Make an EDS for a device that came without one
+
+1. Connect, then **Nodes > Scan** to see the node id.
+2. **EDS editor > Create from node**: the channel, the node id, and leave the ranges empty for the full scan.
+3. Go through the warnings under **Problems**: fix the guessed data types and access types with the manual, and
+   give the manufacturer objects names.
+4. **File and device info**: vendor name, product name.
+5. **Save**, then **To decoder** to decode the node with it.
+
+### Configure a node from a DCF
+
+1. Open the device's EDS, then switch the format to **DCF**.
+2. Type the values the node needs into **DCF value** (or set up one node by hand, then **Compare with node** and
+   **Node values into DCF values**).
+3. **Save as** `node12.dcf`, the record of that node's setup.
+4. **To Nodes**: the node id; keep pre-operational and store ticked.
+5. In the Nodes tab, check the steps, **Preview & run**, read the frames and run them.
+6. **Compare with node** again: the values you wrote should be "same" (status words, actual values and the
+   serial number differ by nature).
+7. Start the node (NMT start), for example from the Nodes tab custom mode (template "NMT: start all nodes").
+
+### Find which bits a pedal changes
+
+This is how the sniffer is meant to be used; it has not been tried on a real machine yet.
+
+1. Connect to the machine (listen-only is enough) and open **Sniffer**. Wait a few seconds, so counters and XOR or
+   sum checksums get their marks.
+2. Leave the pedal alone and press **Notch**.
+3. Press the pedal slowly, all the way, and let it go.
+4. Tick **only new since the notch**. Look for ids with blue-outlined bits: those followed the pedal (ids marked
+   **new id** only appeared after the notch).
+5. Click the id. Under **Candidates**, the range that covers the outlined bits should show a value that follows
+   the pedal, and a seen range from released to fully pressed; try the Motorola and byte-aligned variants if the
+   numbers jump.
+6. **Quick signal**, give it a name, then plot `raw/<name>` on a dashboard and press the pedal again to check it.
+
 ### Build a dashboard
 
 1. **Dashboards** > **New**, type a name. The new dashboard opens in edit mode.
@@ -836,15 +1171,19 @@ Channels are numbered from 0 for Claude (channel 0 is CAN1 in the window).
 - `get_decode_config`, `list_dbc_messages`, `get_canopen_state`, `list_object_dictionary`, `read_sdo`,
   `get_j1939_state`;
 - `list_dashboards`, `get_dashboard`;
-- plugin read tools, for example `get_heartbeat_nodes` of the shipped example.
+- plugin read tools: `get_heartbeat_nodes` (heartbeat monitor), `get_eds_problems`, `list_eds_objects`,
+  `get_eds_pdos` (the PDOs of a file, decoded) and `read_node_vs_eds` (EDS editor), `get_sniffer_changes`
+  (sniffer).
 
-`scan_nodes` and `read_sdo` do send frames (SDO reads, and a listen period), but they change nothing on a node.
+`scan_nodes`, `read_sdo` and `read_node_vs_eds` do send frames (SDO reads, and a listen period), but they change
+nothing on a node.
 
 **What stays on approval.** Every other tool has another verb and transmits, records, replays, loads files or
 changes a node: `connect_channel`, `disconnect_channel`, `send_frame`, `add_transmit_entry`,
 `set_transmit_entry`, `stop_all_transmit`, `start_recording`, `stop_recording`, `start_replay`, `stop_replay`,
 `open_recording_view`, `load_dbc_file`, `assign_eds_file`, `set_j1939_decoding`, `load_pdo_mapping_from_device`,
-`save_dashboard`, `delete_dashboard`, `save_user_recipe` and `run_node_plan`. Keep these on approval, so Claude
+`save_dashboard`, `delete_dashboard`, `save_user_recipe`, `create_eds_from_node` (probes a node and saves an
+EDS), `set_sniffer_notch` (changes only the sniffer's view) and `run_node_plan`. Keep these on approval, so Claude
 Code asks you for each call.
 
 **Node changes take two steps.** Claude first calls a preview tool (`get_set_node_id_preview`,
@@ -868,7 +1207,7 @@ A plugin is a folder with a `manifest.json` and a Python module. It can add:
 - tabs to the window;
 - REST routes;
 - MCP tools for Claude;
-- live frame consumers, which never slow the receive threads down.
+- live frame consumers; the receive threads never wait for them.
 
 To install one, put its folder into the `plugins` folder next to `canopener.exe` and restart CANopener. The
 **Plugins** tab lists what loaded, from which folder, and what failed (with the error). A broken plugin never
@@ -876,8 +1215,13 @@ stops CANopener.
 
 ![The Plugins tab with the shipped example](img/plugins.png)
 
-The shipped example is a CANopen heartbeat monitor: the **Heartbeats** tab shows, per node, the NMT state, the
-heartbeat period, when it was last seen, the count and the boot-ups, and Claude gets `get_heartbeat_nodes`.
+Three plugins ship with CANopener:
+
+- the [EDS editor](#eds-editor);
+- the [Sniffer](#sniffer);
+- a CANopen heartbeat monitor, a small example to start from: the **Heartbeats** tab shows, per node, the NMT
+  state, the heartbeat period, when it was last seen, the count and the boot-ups, and Claude gets
+  `get_heartbeat_nodes`.
 
 Plugins run with full access to your PC and the bus: install only what you have reviewed. To write one, see
 [Writing plugins](PLUGINS.md).
@@ -930,10 +1274,12 @@ Everything sits next to `canopener.exe` (from source: in the repository folder):
 |---|---|
 | `recordings\` | Recordings, trace saves and imported files. |
 | `logs\canopener.log` | The app log. |
-| `logs\nodes.log` | Every node scan, plan and run, with the frames. |
+| `logs\nodes.log` | Node scans from the window, and every plan and run, with the frames. |
 | `projects\` | Saved projects (one `.json` each). |
 | `settings.json` | Last connections, transmit list, decoder setup, dashboards, quick signals. |
 | `recipes\user-recipes.json` | Recipes saved from the custom mode. |
+| `eds\` | Files saved by the EDS editor. |
+| `decode\` | DBC and EDS files uploaded in Decode. |
 | `plugins\` | Your plugins. |
 | `docs\user-guide.html` | This guide (open it by double-click; the About box opens it too). |
 | `README.txt` | A one-page summary. |
@@ -957,7 +1303,8 @@ CANopener on another port: `canopener-cli.exe app --port 8776` (the MCP address 
 **An adapter is not detected.**
 
 - Install the adapter's driver (PEAK, Kvaser, Vector, IXXAT). Unplug and replug, then **Refresh**.
-- CANable with candleLight firmware: bind WinUSB once with Zadig.
+- CANable with candleLight firmware: it may need the WinUSB driver bound to it once, for example with Zadig
+  (not yet confirmed).
 - CANable with slcan firmware: it is a COM port; check Device Manager for its number and type it as the channel.
 - Close other programs that hold the adapter (another CAN tool, a second CANopener on another port).
 
@@ -976,7 +1323,7 @@ CAN FD in CANopener (see the adapter table).
   frames fail.
 
 **Error frames, bus state "passive" or "bus off".** Usually a wrong bit rate, missing termination, or a bad
-connection. A listen-only adapter cannot cause them.
+connection.
 
 **The trace says frames were "not shown live".** More than 25 000 frames per second arrived. They are all in
 the buffer, in **Save...** and in any recording; only the live view skipped them.
@@ -999,18 +1346,21 @@ means another MCP address) and run `claude mcp list`.
 
 ## FAQ
 
-**Does CANopener replace PCAN-View?** For everyday work, yes: receive list, transmit list, trace, recording in
-the `.trc` format, statistics; with PEAK and many other adapters.
+**Does CANopener replace PCAN-View?** That is the goal: receive list, transmit list, trace, recording in the
+`.trc` format, statistics, with PEAK and many other adapters. It has not yet been tested with real adapters, so
+it is not yet confirmed (see [Adapters](#adapters)).
 
-**Can it damage a device?** Watching cannot, especially in listen-only. Sending can, like any CAN tool:
+**Can it damage a device?** Watching with an adapter in listen-only mode should not disturb the bus (not yet
+confirmed on hardware). Without listen-only, the adapter acknowledges frames like any node. Sending can, like any
+CAN tool:
 transmits and replays go onto the bus as you set them up. Node changes are always shown as exact frames first
 and need your confirmation.
 
 **Can I use two CANopener windows?** Yes. Both show the same session. A second CANopener with its own adapters
 needs another port: `canopener-cli.exe app --port 8776`.
 
-**Does it run on Linux?** From source, with SocketCAN, slcan, candleLight and the other python-can backends.
-The release download is for Windows.
+**Does it run on Linux?** It should from source, with SocketCAN, slcan, candleLight and the other python-can
+backends, but that has not been tried yet. The release download is for Windows.
 
 **Where are my recordings?** In the `recordings` folder next to `canopener.exe`; the Record & Replay tab shows
 the path.

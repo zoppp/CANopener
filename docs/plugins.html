@@ -100,8 +100,8 @@ treat it as code: review it like any other change. <code>plugins/heartbeat-monit
 100 lines) that uses every part of the API.</p>
 <p>A plugin can add:</p>
 <ul>
-<li><strong>live frame consumers</strong>: an engine <em>tap</em> receives every frame of every channel without ever slowing the
-receive threads down;</li>
+<li><strong>live frame consumers</strong>: an engine <em>tap</em> receives every frame of every channel; the receive threads never
+wait for it (see the tap rules below);</li>
 <li><strong>REST routes</strong> under <code>/api/x/&lt;id&gt;/</code>;</li>
 <li><strong>MCP tools</strong> for Claude;</li>
 <li><strong>UI tabs</strong> (JavaScript, loaded by the page).</li>
@@ -122,7 +122,10 @@ loaded and what failed (with the error). A broken plugin never stops CANopener.<
   ui/                  optional; every .js file here is loaded (alphabetical) and served at /ui/x/my-plugin/
     my-plugin.js
 </code></pre>
-<p><code>id</code> is lowercase letters, digits and dashes. It appears in URLs, so never change it.</p>
+<p>Use lowercase letters, digits and dashes for <code>id</code> (CANopener also accepts other letters and underscores; spaces,
+slashes and dots are refused). It appears in URLs, so never change it.</p>
+<p>A bigger plugin can be split into modules next to <code>plugin.py</code>: import them relatively (<code>from . import helpers</code>).
+<code>plugins/eds-editor/</code> is an example.</p>
 <h2 id="the-module">The module</h2>
 <pre><code class="language-python">from canopener.core.channel import F_EXT, F_TX, Tap
 from canopener.ext import Extension
@@ -238,6 +241,38 @@ frames first. Do not send node-changing frames from a plugin behind the user's b
 <td>dialogs and messages</td>
 </tr>
 <tr>
+<td><code>openCustomSequence({steps, vars, title})</code></td>
+<td>put node steps (the <code>svc.nodes</code> step format) into the Nodes tab's custom sequence editor and show it; the user previews and runs them</td>
+</tr>
+<tr>
+<td><code>contextMenu(event, items)</code></td>
+<td>a right-click menu at the mouse (text fields keep the native Cut / Copy / Paste menu, in a browser and in the desktop window); <code>items</code> = <code>[{label, action, disabled, shortcut}]</code> or <code>{separator: true}</code> (falsy items are skipped); arrow keys, Enter and Esc work</td>
+</tr>
+<tr>
+<td><code>onContextMenu(el, fn)</code></td>
+<td><code>fn(event)</code> returns the items for that spot (or <code>null</code>); text fields keep the native Cut / Copy / Paste menu and selected text gets a Copy item on top. Elsewhere the app suppresses the browser menu</td>
+</tr>
+<tr>
+<td><code>rowSelect({el, rows, key, keys, text, menu, onDragEnd})</code></td>
+<td>row selection for a table: click, Shift+click, Ctrl+click, mouse drag, Ctrl+A, Esc, Ctrl+C. <code>el</code> is the scrolling element around the rows, <code>rows</code> a row selector (default <code>tr[data-k]</code>), <code>key(tr)</code> the row's stable key (default <code>tr.dataset.k</code>), <code>keys()</code> every shown key in display order, <code>text(keys)</code> the copied text (default: the rows as shown, tab separated with the header), <code>menu(keys, rowKey, event)</code> the right-click items. Returns <code>{has(key), selected(), set(keys), clear(), copy(), busy}</code>: render a selected row with class <code>sel</code> when <code>has(key)</code>, and skip re-rendering while <code>busy</code> (mouse button held). The selection is kept by key, so it survives re-rendering</td>
+</tr>
+<tr>
+<td><code>copyText(text, what)</code></td>
+<td>copy to the clipboard (with a fallback when the clipboard API is not allowed) and toast &quot;Copied <em>what</em>&quot;</td>
+</tr>
+<tr>
+<td><code>readClipboard(where)</code></td>
+<td>clipboard text for a menu &quot;Paste&quot; item, or <code>null</code> with a hint to press Ctrl+V in <em>where</em>; for Ctrl+V itself listen to the <code>paste</code> event (<code>ev.clipboardData</code>)</td>
+</tr>
+<tr>
+<td><code>tableText(trs)</code>, <code>parseFrames(text)</code>, <code>selecting(el)</code></td>
+<td>rows as tab-separated text with the header line; frames from pasted text; true while the user selects text in <code>el</code> (skip re-rendering it then)</td>
+</tr>
+<tr>
+<td><code>traceFilter(ids, exclude)</code>, <code>frameToTx(ch, id, flags, dlc, hex, cycleMs)</code></td>
+<td>show only / hide hex IDs in the trace; open the transmit dialog filled with a frame (nothing is sent)</td>
+</tr>
+<tr>
 <td><code>esc</code>, <code>idText(id, flags)</code>, <code>typeText(flags)</code>, <code>fmtMs</code>, <code>fmtNum</code>, <code>chName(index)</code>, <code>F</code> (flags)</td>
 <td>helpers</td>
 </tr>
@@ -252,8 +287,8 @@ frames first. Do not send node-changing frames from a plugin behind the user's b
 <h2 id="mcp-tool-rules">MCP tool rules</h2>
 <ul>
 <li>The name says whether it changes anything: <code>get_</code>, <code>list_</code>, <code>read_</code> (and <code>scan_</code>) only read. Any other verb transmits,
-writes or changes state and stays on approval, so the user sees each call.</li>
-<li>Never put a dry-run flag on a write tool (approval is per tool name): make a separate <code>get_..._preview</code> tool.</li>
+writes or changes state; keep those off the Claude Code allowlist, so the user approves each call.</li>
+<li>Never put a dry-run flag on a write tool (Claude Code approves per tool name): make a separate <code>get_..._preview</code> tool.</li>
 <li>Tool names are global across plugins: make them specific.</li>
 </ul>
 

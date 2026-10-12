@@ -28,6 +28,7 @@ try {
 
 $app = Join-Path $dist "canopener"
 Copy-Item (Join-Path $PSScriptRoot "README-ZIP.txt") (Join-Path $app "README.txt") -Force
+Copy-Item (Join-Path $root "CHANGELOG.md") (Join-Path $app "CHANGELOG.md") -Force
 New-Item -ItemType Directory -Force (Join-Path $app "recordings") | Out-Null
 New-Item -ItemType Directory -Force (Join-Path $app "plugins") | Out-Null
 # the user guide next to the exe too (double-click docs\user-guide.html; the app also serves it at /guide/)

@@ -2,7 +2,7 @@
 "use strict";
 (function () {
   const CO = window.canopener;
-  let tabEl = null, files = [], folder = "";
+  let tabEl = null, files = [], folder = "", sel = null;
 
   async function loadFiles() {
     const d = await CO.tryApi("/api/recordings");
@@ -14,7 +14,7 @@
   function renderFiles() {
     if (!tabEl) return;
     CO.$("#rp-folder", tabEl).textContent = folder;
-    CO.$("#rp-files", tabEl).innerHTML = files.length ? files.map((f) => `<tr data-name="${CO.esc(f.name)}">
+    CO.$("#rp-files", tabEl).innerHTML = files.length ? files.map((f) => `<tr data-name="${CO.esc(f.name)}" class="${sel.has(f.name) ? "sel" : ""}">
       <td class="m">${CO.esc(f.name)}</td><td class="r">${CO.fmtBytes(f.bytes)}</td><td>${new Date(f.modified * 1000).toLocaleString()}</td>
       <td class="r"><button class="btn small" data-act="open" title="Load into the receive list and trace (offline)">Open</button>
         <button class="btn small" data-act="replay" title="Send onto a bus">Replay&hellip;</button>
@@ -28,12 +28,13 @@
     const live = CO.liveChannels();
     CO.$("#rec-start", tabEl).disabled = !!r || !live.length;
     CO.$("#rec-stop", tabEl).disabled = !r;
-    if (r) {
+    if (CO.selecting(el)) { /* keep the text being selected */ } else if (r) {
       el.innerHTML = `<div class="notice ${r.error ? "bad" : "good"}"><b>Recording</b> to <span class="mono">${CO.esc(r.path)}</span><br>
         ${r.written.toLocaleString()} frames written, ${r.duration} s, ${CO.fmtBytes(r.bytes)}${r.pending > 1000 ? `, ${r.pending.toLocaleString()} queued` : ""}
         ${r.error ? `<br>Error: ${CO.esc(r.error)}` : ""}</div>`;
     } else el.innerHTML = live.length ? `<span class="muted">Not recording.</span>` : `<span class="muted">Connect an adapter to record.</span>`;
     const p = CO.state.replay, ps = CO.$("#rp-status", tabEl);
+    if (CO.selecting(ps)) return;                   // also keeps Pause / Stop under the mouse while it is pressed
     if (p) {
       const running = p.state === "playing" || p.state === "paused";
       ps.innerHTML = `<div class="notice ${p.state === "error" ? "bad" : running ? "good" : ""}"><b>Replay ${CO.esc(p.state)}</b> ${CO.esc(p.path.split(/[\\/]/).pop())}:
@@ -55,6 +56,26 @@
     CO.loadTraceFrames(all);
     CO.toast(`Opened ${name}: ${all.length.toLocaleString()} frames. It shows as a file channel (close it with its x).`, "good");
     CO.show("receive");
+  }
+
+  const fullPath = (name) => folder + (folder.includes("\\") ? "\\" : "/") + name;
+  function download(name) {
+    const a = document.createElement("a");
+    a.href = `/api/recordings/${encodeURIComponent(name)}`; a.download = name; a.click();
+  }
+
+  function filesMenu(keys, k) {
+    if (k === null) return [{ label: "Refresh", action: loadFiles }];
+    const n = keys.length;
+    return [
+      { label: "Open", action: () => openFile(k) },
+      { label: "Replay...", action: () => replayDialog(k) },
+      { label: "Download", action: () => download(k) },
+      { separator: true },
+      { label: n > 1 ? "Copy file names" : "Copy file name", action: () => CO.copyText(keys.join("\n"), n > 1 ? `${n} names` : "file name") },
+      { label: n > 1 ? "Copy full paths" : "Copy full path", action: () => CO.copyText(keys.map(fullPath).join("\n"), n > 1 ? `${n} paths` : "path") },
+      { label: `Copy ${CO.rowsLabel(n)}`, shortcut: "Ctrl+C", action: () => sel.copy() },
+    ];
   }
 
   async function replayDialog(name) {
@@ -95,6 +116,7 @@
         <button class="btn small" id="rp-refresh">Refresh</button></div>
         <table class="tbl" style="margin-top:8px"><thead><tr><th>File</th><th class="r">Size</th><th>Modified</th><th></th></tr></thead><tbody id="rp-files"></tbody></table></div></div>`;
       const $ = (s) => CO.$(s, el);
+      sel = CO.rowSelect({ el: $("#rp-files").closest("table"), rows: "tr[data-name]", key: (tr) => tr.dataset.name, keys: () => files.map((f) => f.name), menu: filesMenu });
       $("#rec-start").onclick = async () => {
         const r = await CO.tryApi("/api/record/start", { name: $("#rec-name").value.trim(), format: $("#rec-fmt").value });
         if (r) { CO.state.recording = r; renderStatus(); }

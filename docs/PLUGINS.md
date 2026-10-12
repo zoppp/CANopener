@@ -6,8 +6,8 @@ treat it as code: review it like any other change. `plugins/heartbeat-monitor/` 
 
 A plugin can add:
 
-- **live frame consumers**: an engine *tap* receives every frame of every channel without ever slowing the
-  receive threads down;
+- **live frame consumers**: an engine *tap* receives every frame of every channel; the receive threads never
+  wait for it (see the tap rules below);
 - **REST routes** under `/api/x/<id>/`;
 - **MCP tools** for Claude;
 - **UI tabs** (JavaScript, loaded by the page).
@@ -33,7 +33,11 @@ my-plugin/
     my-plugin.js
 ```
 
-`id` is lowercase letters, digits and dashes. It appears in URLs, so never change it.
+Use lowercase letters, digits and dashes for `id` (CANopener also accepts other letters and underscores; spaces,
+slashes and dots are refused). It appears in URLs, so never change it.
+
+A bigger plugin can be split into modules next to `plugin.py`: import them relatively (`from . import helpers`).
+`plugins/eds-editor/` is an example.
 
 ## The module
 
@@ -106,6 +110,14 @@ Scripts in `ui/` run after the page has started and use `window.canopener` (also
 | `onFeed(fn)` | every 100 ms feed message: `{channels, rows, trace, events, ...}`; `{type: "open"/"closed"}` on (re)connect |
 | `api(path, body?, method?)`, `tryApi(...)` | REST calls (`tryApi` shows errors as a toast) |
 | `modal({title, body, buttons})`, `confirm(...)`, `toast(msg, kind)` | dialogs and messages |
+| `openCustomSequence({steps, vars, title})` | put node steps (the `svc.nodes` step format) into the Nodes tab's custom sequence editor and show it; the user previews and runs them |
+| `contextMenu(event, items)` | a right-click menu at the mouse (text fields keep the native Cut / Copy / Paste menu, in a browser and in the desktop window); `items` = `[{label, action, disabled, shortcut}]` or `{separator: true}` (falsy items are skipped); arrow keys, Enter and Esc work |
+| `onContextMenu(el, fn)` | `fn(event)` returns the items for that spot (or `null`); text fields keep the native Cut / Copy / Paste menu and selected text gets a Copy item on top. Elsewhere the app suppresses the browser menu |
+| `rowSelect({el, rows, key, keys, text, menu, onDragEnd})` | row selection for a table: click, Shift+click, Ctrl+click, mouse drag, Ctrl+A, Esc, Ctrl+C. `el` is the scrolling element around the rows, `rows` a row selector (default `tr[data-k]`), `key(tr)` the row's stable key (default `tr.dataset.k`), `keys()` every shown key in display order, `text(keys)` the copied text (default: the rows as shown, tab separated with the header), `menu(keys, rowKey, event)` the right-click items. Returns `{has(key), selected(), set(keys), clear(), copy(), busy}`: render a selected row with class `sel` when `has(key)`, and skip re-rendering while `busy` (mouse button held). The selection is kept by key, so it survives re-rendering |
+| `copyText(text, what)` | copy to the clipboard (with a fallback when the clipboard API is not allowed) and toast "Copied *what*" |
+| `readClipboard(where)` | clipboard text for a menu "Paste" item, or `null` with a hint to press Ctrl+V in *where*; for Ctrl+V itself listen to the `paste` event (`ev.clipboardData`) |
+| `tableText(trs)`, `parseFrames(text)`, `selecting(el)` | rows as tab-separated text with the header line; frames from pasted text; true while the user selects text in `el` (skip re-rendering it then) |
+| `traceFilter(ids, exclude)`, `frameToTx(ch, id, flags, dlc, hex, cycleMs)` | show only / hide hex IDs in the trace; open the transmit dialog filled with a frame (nothing is sent) |
 | `esc`, `idText(id, flags)`, `typeText(flags)`, `fmtMs`, `fmtNum`, `chName(index)`, `F` (flags) | helpers |
 | `state.channels`, `state.signals`, `receiveRows`, `traceBuffer()` | live state (`state.signals[key]` = latest decoded value) |
 
@@ -115,6 +127,6 @@ Escape everything you put into HTML with `esc()`. Use the existing CSS classes (
 ## MCP tool rules
 
 - The name says whether it changes anything: `get_`, `list_`, `read_` (and `scan_`) only read. Any other verb transmits,
-  writes or changes state and stays on approval, so the user sees each call.
-- Never put a dry-run flag on a write tool (approval is per tool name): make a separate `get_..._preview` tool.
+  writes or changes state; keep those off the Claude Code allowlist, so the user approves each call.
+- Never put a dry-run flag on a write tool (Claude Code approves per tool name): make a separate `get_..._preview` tool.
 - Tool names are global across plugins: make them specific.

@@ -26,6 +26,7 @@
   async function loadDbc() { const d = await CO.tryApi("/api/decode/dbc"); if (d) dbc = d; }
   async function refresh() {
     if (!tabEl || tabEl.hidden || (document.activeElement && document.activeElement.matches("#dec-body input"))) return;
+    if (CO.selecting(CO.$("#dec-body", tabEl)) || CO.$(".ctx-menu")) return;    // keep a text selection / the open menu's rows
     if (sub === "canopen") { const d = await CO.tryApi("/api/decode/canopen"); if (d) { co = d; renderCanopen(); } }
     else if (sub === "j1939") { const d = await CO.tryApi("/api/decode/j1939"); if (d) { j1939 = d; renderJ1939(); } }
   }
@@ -219,6 +220,19 @@
     CO.$("#tp-clear", el).onclick = async () => { await CO.tryApi("/api/decode/clear", {}); refresh(); };
   }
 
+  function tableMenu(ev) {
+    const td = ev.target.closest("td"), tr = td && td.closest("tbody tr");
+    if (!tr || td.classList.contains("empty")) return null;
+    const cell = td.querySelector("button") ? "" : td.textContent.replace(/\s+/g, " ").trim(), k = tr.dataset.k;
+    return [
+      { label: "Copy value", disabled: !cell, action: () => CO.copyText(cell, "value") },
+      { label: "Copy row", action: () => CO.copyText(CO.tableText([tr]), "1 row") },
+      { label: "Copy table", action: () => { const trs = CO.$$("tr", tr.closest("tbody")); CO.copyText(CO.tableText(trs), `${trs.length} rows`); } },
+      sub === "canopen" && odNode && k && tr.closest("#od-rows") && { separator: true },
+      sub === "canopen" && odNode && k && tr.closest("#od-rows") && { label: "Read from the node (SDO)", action: () => sdoAction("read", k) },
+    ];
+  }
+
   // ---------------------------------------------------------------- tab
   function renderSub() {
     CO.prefs.set("dec.sub", sub);
@@ -255,6 +269,7 @@
       $("#co-assign").onclick = () => edsAssign(null);
       $("#co-file").onchange = async (e) => { const f = e.target.files[0]; if (f) await edsAssign(f); e.target.value = ""; };
       $("#dec-body").addEventListener("click", (ev) => { if (sub === "canopen") canopenAction(ev); });
+      CO.onContextMenu($("#dec-body"), tableMenu);
     },
     async onShow() { await loadDbc(); renderSub(); },
   });

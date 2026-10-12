@@ -3,7 +3,20 @@
 (function () {
   const CO = window.canopener, F = CO.F;
   const hist = {};                 // channel index -> [[t, load, fps], ...]
-  let tabEl = null, lastSample = 0;
+  let tabEl = null, lastSample = 0, sel = null, top = [];   // top: the busiest-ID rows shown
+
+  function topMenu(keys) {
+    const rs = keys.map((k) => top.find((r) => r[0] === k)).filter(Boolean);
+    if (!rs.length) return null;
+    const ids = [...new Set(rs.map((r) => CO.idText(r[2], r[3])))], many = ids.length > 1;
+    return [
+      { label: `Copy ${CO.rowsLabel(rs.length)}`, shortcut: "Ctrl+C", action: () => sel.copy() },
+      { label: many ? "Copy IDs" : "Copy ID", action: () => CO.copyText(ids.join("\n"), many ? `${ids.length} IDs` : "ID") },
+      { separator: true },
+      { label: many ? "Show only these IDs in the trace" : "Show only this ID in the trace", action: () => { CO.traceFilter(ids, false); CO.show("trace"); } },
+      { label: many ? "Hide these IDs in the trace" : "Hide this ID in the trace", action: () => { CO.traceFilter(ids, true); CO.show("trace"); } },
+    ];
+  }
 
   function sample() {
     const now = Date.now();
@@ -43,7 +56,7 @@
     if (!tabEl || tabEl.hidden) return;
     const chans = CO.state.channels;
     const cards = CO.$("#st-cards", tabEl);
-    if (!chans.length) { cards.innerHTML = `<div class="empty">Connect an adapter to see bus statistics.</div>`; CO.$("#st-top", tabEl).innerHTML = ""; return; }
+    if (!chans.length) { cards.innerHTML = `<div class="empty">Connect an adapter to see bus statistics.</div>`; cards._sig = ""; CO.$("#st-top", tabEl).innerHTML = ""; return; }
     const sig = chans.map((c) => c.index).join(",");
     if (cards._sig !== sig) {
       cards._sig = sig;
@@ -51,7 +64,7 @@
         <div class="kv" data-f="kv"></div>${c.state === "file" ? "" : `<canvas class="chart" style="margin-top:10px"></canvas>`}</div>`).join("");
     }
     for (const c of chans) {
-      const card = CO.$(`[data-ch="${c.index}"]`, cards); if (!card) continue;
+      const card = CO.$(`[data-ch="${c.index}"]`, cards); if (!card || CO.selecting(card)) continue;
       const cfg = c.config || {};
       CO.$("[data-f=desc]", card).textContent = c.state === "file" ? "file view" : `${c.backend} ${cfg.channel ?? ""} - ${cfg.bitrate / 1000} kbit/s${cfg.fd ? ` / FD ${cfg.data_bitrate / 1e6} M` : ""}${cfg.listen_only ? " - listen-only" : ""}`;
       const up = c.t_open ? Math.round(Date.now() / 1000 - c.t_open) : 0;
@@ -69,9 +82,11 @@
     }
     // busiest ids from the receive list
     // average rate over the whole time an id was seen; ids seen only a few times (SDO, NMT) are not "busy"
+    if (sel.busy) return;                       // a mouse drag is selecting rows
     const rows = [...(CO.receiveRows || new Map()).values()].map((v) => v.r).filter((r) => r[12] > 0 && r[7] >= 5 && !(r[3] & F.ERR));
     rows.sort((a, b) => a[12] - b[12]);
-    CO.$("#st-top", tabEl).innerHTML = rows.slice(0, 20).map((r) => `<tr><td>${CO.esc(CO.chName(r[1]))}</td><td class="m">${CO.idText(r[2], r[3])}${r[3] & F.TX ? " Tx" : ""}</td>
+    top = rows.slice(0, 20);
+    CO.$("#st-top", tabEl).innerHTML = top.map((r) => `<tr data-k="${CO.esc(r[0])}" class="${sel.has(r[0]) ? "sel" : ""}"><td>${CO.esc(CO.chName(r[1]))}</td><td class="m">${CO.idText(r[2], r[3])}${r[3] & F.TX ? " Tx" : ""}</td>
       <td class="r m">${(1000 / r[12]).toFixed(1)}</td><td class="r m">${CO.fmtMs(r[12])}</td><td class="r m">${CO.fmtMs(r[9])} - ${CO.fmtMs(r[10])}</td><td class="r m">${CO.fmtNum(r[7])}</td></tr>`).join("")
       || `<tr><td colspan="6" class="empty">No periodic traffic yet.</td></tr>`;
   }
@@ -84,6 +99,7 @@
         <div class="card" style="margin-top:12px"><h3>Busiest IDs</h3>
         <table class="tbl compact"><thead><tr><th>Ch</th><th>ID</th><th class="r">Frames/s</th><th class="r">Avg cycle ms</th><th class="r">Min - max ms</th><th class="r">Count</th></tr></thead>
         <tbody id="st-top"></tbody></table></div></div>`;
+      sel = CO.rowSelect({ el: CO.$("#st-top", el).closest("table"), keys: () => top.map((r) => r[0]), menu: topMenu });
     },
     onShow: render,
   });

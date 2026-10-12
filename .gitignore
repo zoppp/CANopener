@@ -12,5 +12,6 @@ recipes/user-recipes.json
 packaging/build_info.json
 settings.json
 projects/
+eds/
 plugins-local/
 .claude/

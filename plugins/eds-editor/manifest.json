@@ -1,0 +1,7 @@
+{
+  "id": "eds-editor",
+  "title": "EDS editor",
+  "version": "1.0",
+  "description": "CANopen EDS/DCF files: create, check, edit, PDO editor; compare with a node or build one from a node.",
+  "module": "plugin.py"
+}

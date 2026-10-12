@@ -3,9 +3,10 @@
 (function () {
   const CO = window.canopener, F = CO.F;
   const rows = new Map();          // key -> {r: row array, chg: [byte change times], seen}
-  let sortKey = CO.prefs.get("rx.sort", "id"), sortDir = 1, selected = null, frozen = false;
+  let sortKey = CO.prefs.get("rx.sort", "id"), sortDir = 1, frozen = false, rxSel = null, txRows = null;
+  let shown = [], shownMap = new Map();          // the rows as last drawn: menus act on those (Freeze keeps them)
   let chFilter = "all", idFilter = "", showTx = CO.prefs.get("rx.showTx", false);
-  let tabEl = null, txEntries = [], txSel = null;
+  let tabEl = null, txEntries = [];
   CO.receiveRows = rows;           // decoders / plugins may read it
 
   // row layout from the server: [key, ch, id, flags, dlc, data, prev, count, cycle, min, max, t_last]
@@ -62,13 +63,15 @@
   }
 
   function renderRx() {
-    if (!tabEl || tabEl.hidden || frozen) return;
+    if (!tabEl || tabEl.hidden || frozen || rxSel.busy) return;     // busy: a mouse drag is selecting rows
     const list = sorted();
+    shown = list.map((v) => ({ r: v.r.slice() }));
+    shownMap = new Map(shown.map((v) => [v.r[0], v]));
     const multi = CO.state.channels.length > 1;
     const dec = CO.decodedText && Object.keys(CO.decodedText).length > 0;     // filled by decode.js
     const body = list.map((v) => {
       const r = v.r;
-      const cls = (r[0] === selected ? "sel " : "") + (r[3] & F.ERR ? "err" : "");
+      const cls = (rxSel.has(r[0]) ? "sel " : "") + (r[3] & F.ERR ? "err" : "");
       return `<tr data-k="${r[0]}" class="${cls}">${multi ? `<td>${CO.esc(CO.chName(r[1]))}</td>` : ""}` +
         `<td class="m ${r[3] & F.TX ? "tx" : ""}">${CO.idText(r[2], r[3])}${r[3] & F.TX ? " Tx" : ""}</td><td>${CO.typeText(r[3])}</td><td class="r m">${r[4]}</td>` +
         `<td class="m data">${dataHtml(v)}</td><td class="r m">${CO.fmtMs(r[8])}</td><td class="r m">${CO.fmtNum(r[7])}</td>` +
@@ -99,7 +102,7 @@
       const flags = (e.ext ? F.EXT : 0) | (e.fd ? F.FD : 0) | (e.brs ? F.BRS : 0) | (e.rtr ? F.RTR : 0);
       const data = e.rtr ? `<span class="muted">remote, DLC ${e.dlc}</span>` : CO.esc(CO.spaced((e.data || "").replace(/[^0-9a-f]/gi, "").toUpperCase()));
       const nbytes = (e.data || "").replace(/[^0-9a-f]/gi, "").length / 2;
-      return `<tr data-tx="${e.id}" class="${txSel === e.id ? "sel" : ""}">
+      return `<tr data-tx="${e.id}" class="${txRows.has(e.id) ? "sel" : ""}">
         <td><input type="checkbox" data-act="cyc" ${live.enabled ? "checked" : ""} ${e.period_ms > 0 ? "" : "disabled"} title="${e.period_ms > 0 ? "Send cyclically" : "Set a cycle time to send cyclically"}"></td>
         ${multi ? `<td>${CO.esc(CO.chName(e.channel))}</td>` : ""}
         <td class="m">${CO.idText(e.can_id, flags)}</td><td>${CO.typeText(flags)}</td><td class="r m">${e.rtr ? e.dlc : nbytes}</td>
@@ -175,12 +178,126 @@
     }
   }
 
+  async function setCyclic(id, on) {
+    const r = await CO.tryApi(`/api/tx/${id}`, { enabled: on }, null, "PATCH");
+    if (r) { CO.state.txLive[id] = { ...(CO.state.txLive[id] || {}), ...r }; updateTxLive(); }
+  }
+
+  async function deleteTx(list) {
+    if (list.length > 1 && !(await CO.confirm("Delete transmit entries", `Delete ${list.length} transmit entries?`, "Delete", true))) return;
+    for (const e of list) if (!(await CO.tryApi(`/api/tx/${e.id}`, undefined, null, "DELETE"))) break;
+    CO.reloadTx();
+  }
+
+  async function duplicateTx(e) {
+    const copy = { ...e, enabled: false };
+    delete copy.id; delete copy.count; delete copy.error;
+    if (await CO.tryApi("/api/tx", copy)) CO.reloadTx();
+  }
+
+  const txFlags = (e) => (e.ext ? F.EXT : 0) | (e.fd ? F.FD : 0) | (e.brs ? F.BRS : 0) | (e.rtr ? F.RTR : 0);
+  function txText(keys) {                                 // columns that CO.parseFrames reads back
+    return ["Ch\tID\tType\tDLC\tData\tCycle ms\tComment"].concat(keys.map((id) => txEntries.find((e) => e.id === id)).filter(Boolean).map((e) => {
+      const hex = (e.data || "").replace(/[^0-9a-f]/gi, "").toUpperCase();
+      return [CO.chName(e.channel), CO.idText(e.can_id, txFlags(e)), CO.typeText(txFlags(e)), e.rtr ? e.dlc : hex.length / 2,
+        e.rtr ? "remote request" : CO.spaced(hex), e.period_ms > 0 ? e.period_ms : "manual", (e.comment || "").replace(/\s+/g, " ")].join("\t");
+    })).join("\n");
+  }
+
+  /* Pasted lines of "ID data" (or copied receive / trace / transmit rows) become manual transmit entries after a
+     confirmation. Nothing is sent. */
+  async function pasteFrames(text) {
+    const { frames, bad } = CO.parseFrames(text);
+    if (!frames.length) {
+      CO.toast(bad.length ? `No frames in the pasted text (${bad.length} line${bad.length === 1 ? "" : "s"} not understood). Paste lines like 18FEF100 FF 80 20 00` : "Nothing to paste", "warn");
+      return;
+    }
+    const MAX = 200, list = frames.slice(0, MAX);
+    const known = (c) => c !== null && CO.state.channels.some((x) => x.index === c);
+    const chans = CO.state.channels.length ? CO.state.channels : [{ index: 0, name: "CAN1" }];
+    const dflt = (CO.liveChannels()[0] || chans[0]).index;
+    const res = await CO.modal({
+      title: `Add ${list.length} pasted frame${list.length === 1 ? "" : "s"} to the transmit list`,
+      body: `<p class="small muted">They are added as manual entries (no cycle time). Nothing is sent until you click Send.</p>
+        ${frames.length > MAX ? `<div class="notice warn">Only the first ${MAX} of ${frames.length} frames are added.</div>` : ""}
+        ${bad.length ? `<div class="notice warn">${bad.length} line${bad.length === 1 ? "" : "s"} not understood, left out: <span class="mono small">${CO.esc(bad.slice(0, 3).join("  |  "))}${bad.length > 3 ? " ..." : ""}</span></div>` : ""}
+        <label class="field"><span>Channel for frames without a known channel</span><select id="pf-ch">${chans.map((c) => `<option value="${c.index}" ${c.index === dflt ? "selected" : ""}>${CO.esc(c.name)}</option>`).join("")}</select></label>
+        <div class="scroll" style="max-height:45vh"><table class="tbl compact"><thead><tr><th>Ch</th><th>ID</th><th>Type</th><th class="r">DLC</th><th>Data</th></tr></thead><tbody>
+        ${list.map((f) => `<tr><td>${known(f.channel) ? CO.esc(CO.chName(f.channel)) : `<span class="muted">(channel above)</span>`}</td><td class="m">${CO.idText(f.can_id, txFlags(f))}</td>
+          <td>${CO.typeText(txFlags(f))}</td><td class="r m">${f.dlc}</td><td class="m">${f.rtr ? "remote request" : CO.esc(f.data)}</td></tr>`).join("")}</tbody></table></div>`,
+      buttons: [{ label: "Cancel", value: "cancel" }, { label: `Add ${list.length}`, value: "ok", cls: "primary" }],
+    });
+    if (!res) return;
+    const ch = +CO.$("#pf-ch", res.form).value;
+    let added = 0;
+    for (const f of list) {
+      if (!(await CO.tryApi("/api/tx", { ...f, channel: known(f.channel) ? f.channel : ch, period_ms: 0, enabled: false, comment: "" }))) break;
+      added++;
+    }
+    if (added) CO.toast(`Added ${added} transmit entr${added === 1 ? "y" : "ies"}`, added === list.length ? "good" : "warn");
+    CO.reloadTx();
+  }
+  const pasteItem = () => ({ label: "Paste frames", shortcut: "Ctrl+V", action: async () => {
+    const t = await CO.readClipboard("the transmit list");
+    if (t !== null) pasteFrames(t); else if (tabEl) CO.$("#tx-pane .scroll", tabEl).focus();
+  } });
+
+  function txMenu(keys, k) {
+    const e = txEntries.find((x) => x.id === k);
+    if (!e) return [{ label: "New entry...", action: () => CO.editTx() }, pasteItem(), { separator: true },
+      { label: "Stop all cyclic", action: () => CO.tryApi("/api/tx/stop_all", {}) }];
+    const sel = keys.map((id) => txEntries.find((x) => x.id === id)).filter(Boolean), n = sel.length;
+    const live = CO.state.txLive[e.id] || e;
+    return [
+      { label: "Send once", shortcut: n === 1 ? "Space" : "", action: () => txAction("send", e.id) },
+      { label: "Edit...", action: () => CO.editTx(e) },
+      { label: "Duplicate", action: () => duplicateTx(e) },
+      { label: live.enabled ? "Stop cyclic" : "Start cyclic", disabled: !(e.period_ms > 0), action: () => setCyclic(e.id, !live.enabled) },
+      { label: n > 1 ? `Delete ${n} entries` : "Delete", action: () => deleteTx(sel) },
+      { separator: true },
+      { label: `Copy ${CO.rowsLabel(n)}`, shortcut: "Ctrl+C", action: () => txRows.copy() },
+      pasteItem(),
+      { label: "Select all", shortcut: "Ctrl+A", action: () => txRows.set(txEntries.map((x) => x.id)) },
+    ];
+  }
+
+  /* Opens the transmit dialog filled with a frame (plugins may use it). Nothing is sent: the user adds the entry. */
+  CO.frameToTx = (ch, id, flags, dlc, hex, cycleMs) => CO.editTx({ can_id: id, data: CO.spaced(hex), ext: !!(flags & F.EXT), fd: !!(flags & F.FD),
+    brs: !!(flags & F.BRS), rtr: !!(flags & F.RTR), dlc, period_ms: cycleMs > 0 ? Math.round(cycleMs) : 0, channel: ch, comment: "" });
+  const rowToTx = (r) => CO.frameToTx(r[1], r[2], r[3], r[4], r[5], r[8]);
+
   function copyToTx() {
-    const v = rows.get(selected);
+    const v = rows.get(rxSel.anchor ?? rxSel.selected()[0]);
     if (!v) { CO.toast("Select a row in the receive list first", "warn"); return; }
-    const r = v.r;
-    CO.editTx({ can_id: r[2], data: CO.spaced(r[5]), ext: !!(r[3] & F.EXT), fd: !!(r[3] & F.FD), brs: !!(r[3] & F.BRS),
-      rtr: !!(r[3] & F.RTR), dlc: r[4], period_ms: r[8] > 0 ? Math.round(r[8]) : 0, channel: r[1], comment: "" });
+    rowToTx(v.r);
+  }
+
+  function setFrozen(on) {
+    frozen = on;
+    const b = CO.$("#rx-freeze", tabEl);
+    b.classList.toggle("on", frozen); b.textContent = frozen ? "Frozen" : "Freeze";
+    renderRx();
+  }
+
+  function rxMenu(keys, k) {
+    const freeze = { label: frozen ? "Unfreeze view" : "Freeze view", action: () => setFrozen(!frozen) };
+    const sel = keys.map((x) => shownMap.get(x)).filter(Boolean).map((v) => v.r);
+    if (!sel.length) return [freeze];
+    const one = shownMap.get(k) ? shownMap.get(k).r : sel[0], n = sel.length;
+    const ids = [...new Set(sel.map((r) => CO.idText(r[2], r[3])))], many = ids.length > 1;
+    return [
+      { label: `Copy ${CO.rowsLabel(n)}`, shortcut: "Ctrl+C", action: () => rxSel.copy() },
+      { label: many ? "Copy IDs" : "Copy ID", action: () => CO.copyText(ids.join("\n"), many ? `${ids.length} IDs` : "ID") },
+      { label: "Copy data (hex)", action: () => CO.copyText(sel.map((r) => CO.spaced(r[5])).join("\n"), "data") },
+      { separator: true },
+      { label: "Add to transmit list...", disabled: !!(one[3] & F.ERR), action: () => rowToTx(one) },
+      { separator: true },
+      { label: many ? "Show only these IDs in the trace" : "Show only this ID in the trace", action: () => { CO.traceFilter(ids, false); CO.show("trace"); } },
+      { label: many ? "Hide these IDs in the trace" : "Hide this ID in the trace", action: () => { CO.traceFilter(ids, true); CO.show("trace"); } },
+      { separator: true },
+      freeze,
+      { label: "Select all", shortcut: "Ctrl+A", action: () => rxSel.set(shown.map((v) => v.r[0])) },
+    ];
   }
 
   // ---------------------------------------------------------------- tab
@@ -207,18 +324,28 @@
           </div>
           <div class="splitter" id="rx-splitter" title="Drag to resize"></div>
           <div class="pane" id="tx-pane" style="flex:${1 - ratio} 1 0">
-            <div class="pane-head">Transmit <span class="muted small">double-click to edit, Space sends the selected row</span><span class="spacer"></span>
+            <div class="pane-head">Transmit <span class="muted small">double-click to edit, Space sends the selected row, right-click for more</span><span class="spacer"></span>
               <button class="btn small" id="tx-new">+ New</button><button class="btn small" id="tx-stop" title="Stop all cyclic entries">Stop all</button></div>
             <div class="scroll"><table class="tbl" id="tx-table"><thead></thead><tbody></tbody></table>
               <div class="empty" id="tx-empty">No transmit entries. + New adds one; "To transmit" copies a received frame.</div></div>
           </div>
         </div>`;
       const $ = (s) => CO.$(s, el);
+      rxSel = CO.rowSelect({ el: $("#rx-pane .scroll"), keys: () => shown.map((v) => v.r[0]), menu: rxMenu, onDragEnd: renderRx });
+      const txEl = $("#tx-pane .scroll");
+      txRows = CO.rowSelect({ el: txEl, rows: "tr[data-tx]", key: (tr) => +tr.dataset.tx, keys: () => txEntries.map((e) => e.id), text: txText, menu: txMenu });
+      // the paste event goes to the text selection or <body>, not to the focused list: route it by focus
+      document.addEventListener("paste", (ev) => {
+        const f = document.activeElement;
+        if (el.hidden || !txEl.contains(f) || CO.isEditable(f)) return;
+        ev.preventDefault();
+        pasteFrames(ev.clipboardData.getData("text/plain"));
+      });
       $("#rx-id").value = idFilter;
       $("#rx-ch").onchange = (e) => { chFilter = e.target.value; renderRx(); };
       $("#rx-id").oninput = (e) => { idFilter = e.target.value; renderRx(); };
       $("#rx-tx").onchange = (e) => { showTx = e.target.checked; CO.prefs.set("rx.showTx", showTx); renderRx(); };
-      $("#rx-freeze").onclick = (e) => { frozen = !frozen; e.target.classList.toggle("on", frozen); e.target.textContent = frozen ? "Frozen" : "Freeze"; renderRx(); };
+      $("#rx-freeze").onclick = () => setFrozen(!frozen);
       // the server sends the cleared channel's table again (full refresh); other channels keep their rows
       $("#rx-clear").onclick = () => CO.tryApi("/api/channel/clear", { index: chFilter === "all" ? null : +chFilter });
       $("#rx-copy").onclick = copyToTx;
@@ -227,15 +354,13 @@
       $("#rx-table").addEventListener("click", (ev) => {
         const th = ev.target.closest("th[data-s]");
         if (th) { const k = th.dataset.s; sortDir = sortKey === k ? -sortDir : 1; sortKey = k; CO.prefs.set("rx.sort", k); renderRx(); return; }
-        const tr = ev.target.closest("tr[data-k]"); if (tr) { selected = tr.dataset.k; renderRx(); }
       });
-      $("#rx-table").addEventListener("dblclick", (ev) => { const tr = ev.target.closest("tr[data-k]"); if (tr) { selected = tr.dataset.k; copyToTx(); } });
+      $("#rx-table").addEventListener("dblclick", (ev) => { const tr = ev.target.closest("tr[data-k]"), v = tr && shownMap.get(tr.dataset.k); if (v) rowToTx(v.r); });
       $("#tx-table").addEventListener("click", (ev) => {
         const tr = ev.target.closest("tr[data-tx]"); if (!tr) return;
         const id = +tr.dataset.tx;
         const act = ev.target.closest("[data-act]");
-        if (act && act.dataset.act !== "cyc") { txAction(act.dataset.act, id, act); return; }
-        txSel = id; CO.$$("#tx-table tr", el).forEach((r) => r.classList.toggle("sel", +r.dataset.tx === id));
+        if (act && act.dataset.act !== "cyc") txAction(act.dataset.act, id, act);
       });
       $("#tx-table").addEventListener("change", (ev) => { const cb = ev.target.closest("[data-act=cyc]"); if (cb) txAction("cyc", +cb.closest("tr").dataset.tx, cb); });
       $("#tx-table").addEventListener("dblclick", (ev) => { const tr = ev.target.closest("tr[data-tx]"); if (tr && !ev.target.closest("button,input")) txAction("edit", +tr.dataset.tx); });
@@ -254,10 +379,13 @@
   });
 
   document.addEventListener("keydown", (ev) => {
-    if (ev.code !== "Space" || CO.current !== "receive" || txSel === null) return;
+    if (ev.code !== "Space" || CO.current !== "receive" || !txRows || ev.repeat) return;
     if (ev.target.closest("input, textarea, select, button, dialog")) return;
+    if (!tabEl || !CO.$("#tx-pane", tabEl).contains(document.activeElement)) return;   // the transmit list has the focus
+    const ks = txRows.selected();
+    if (ks.length !== 1) return;                          // Space sends one selected entry, never several
     ev.preventDefault();
-    txAction("send", txSel);
+    txAction("send", ks[0]);
   });
 
   let lastChans = "";

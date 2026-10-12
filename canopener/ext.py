@@ -88,7 +88,8 @@ def load_plugin(folder: Path) -> Extension:
     if not _inside(folder, path):
         raise ValueError(f"module {man.get('module')!r} is outside the plugin folder")
     name = f"canopener_plugin_{pid.replace('-', '_')}"
-    spec = importlib.util.spec_from_file_location(name, path)
+    # the module is the package of its folder, so a plugin can be split into modules: `from . import helpers`
+    spec = importlib.util.spec_from_file_location(name, path, submodule_search_locations=[str(folder)])
     mod = importlib.util.module_from_spec(spec)
     sys.modules[name] = mod
     spec.loader.exec_module(mod)

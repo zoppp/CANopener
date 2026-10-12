@@ -1,0 +1,7 @@
+{
+  "id": "sniffer",
+  "title": "Sniffer",
+  "version": "1.0",
+  "description": "Reverse engineering: changing bits per id, notch to find what an action changes, counter/checksum guesses, candidate signals.",
+  "module": "plugin.py"
+}

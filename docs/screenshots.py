@@ -84,6 +84,30 @@ SHOTS = [
     ("dash-widget", """CO.show('dash'); await sleep(1500); document.querySelector('#db-edit').click(); await sleep(800);
         document.querySelectorAll('.dash-w')[1].querySelector('[data-act=cfg]').click();""", 2),
     ("quick-signals", "CO.show('dash'); await sleep(1000); document.querySelector('#db-quick').click();", 3),
+    ("eds-editor", """CO.show('eds'); await sleep(800); document.querySelector('[data-act=new]').click(); await sleep(600);
+        const f = document.querySelector('#modal-form'); f.querySelector('#nd-p').value = '402';
+        f.querySelector('#nd-vn').value = 'Demo Drives'; f.querySelector('#nd-vi').value = '0x00000CA0';
+        f.querySelector('#nd-pn').value = 'Demo drive'; f.querySelector('#nd-f').value = 'demo-drive';
+        f.requestSubmit(f.querySelector('button[value=ok]')); await sleep(1200);
+        document.querySelector('.ee-node[data-i="6658"]:not([data-s])').click();""", 2),
+    ("eds-pdo", """CO.show('eds'); await sleep(800); document.querySelector('[data-act=new]').click(); await sleep(600);
+        const f = document.querySelector('#modal-form'); f.querySelector('#nd-p').value = '402';
+        f.querySelector('#nd-pn').value = 'Demo drive'; f.querySelector('#nd-f').value = 'demo-drive';
+        f.requestSubmit(f.querySelector('button[value=ok]')); await sleep(1200);
+        document.querySelector('.ee-node[data-pdos]').click(); await sleep(400);
+        document.querySelector('[data-pdo-sel="tpdo:3"]').click(); await sleep(300);
+        const t = document.querySelector('[data-pc="tt"]'); t.value = 'cyc';
+        t.dispatchEvent(new Event('input', {bubbles: true}));""", 2),
+    ("eds-compare", """CO.show('eds'); await sleep(800); document.querySelector('[data-act=open]').click(); await sleep(800);
+        [...document.querySelectorAll('#modal-form a[data-k]')].find((a) => a.textContent === 'test_node.eds').click();
+        await sleep(1200); document.querySelector('[data-act=compare]').click(); await sleep(600);
+        const f = document.querySelector('#modal-form'); f.querySelector('#dv-n').value = '5';
+        f.requestSubmit(f.querySelector('button[value=ok]'));
+        for (let i = 0; i < 50; i++) { await sleep(300);
+          const h = document.querySelector('#modal-form .dlg-head'); if (h && h.textContent.includes(' vs ')) break; }
+        document.querySelector('#cp-only').click();""", 1),
+    ("sniffer", """CO.show('sniffer'); await sleep(6000);
+        [...document.querySelectorAll('#sn-body tr[data-key]')].find((t) => t.textContent.includes('0CF')).click();""", 3),
     ("projects", "document.querySelector('#btn-project').click();", 2),
     ("plugins", "CO.show('plugins')", 2),
     ("about", "document.querySelector('#btn-about').click();", 2),

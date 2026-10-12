@@ -127,13 +127,28 @@ label { color: var(--fg2); }
 .trace-wrap { position: relative; overflow: auto; flex: 1; min-height: 0; font-family: var(--mono); font-size: 12.5px; }
 .trace-head, .trace-row { display: grid; grid-template-columns: 70px 112px 40px 34px 92px 64px 40px 1fr; gap: 0 10px;
   padding: 0 10px; height: var(--row); align-items: center; white-space: nowrap; }
-.trace-head { position: sticky; top: 0; background: var(--bg3); color: var(--fg2); font-weight: 600; z-index: 2;
+.trace-head { position: sticky; top: 0; background: var(--bg3); color: var(--fg2); font-weight: 600; z-index: 2; user-select: none;
   border-bottom: 1px solid var(--line2); font-family: "Segoe UI", system-ui, sans-serif; font-size: 12px; }
 .trace-rows { position: absolute; left: 0; right: 0; }
 .trace-row { border-bottom: 1px solid var(--line); }
 .trace-row.tx { color: var(--tx); }
 .trace-row.err { color: var(--err); }
 .trace-row:nth-child(even) { background: color-mix(in srgb, var(--bg2) 60%, transparent); }
+.trace-row.sel { background: var(--sel); }
+
+/* row selection (CO.rowSelect) and right-click menus (CO.contextMenu) */
+.rowsel:focus { outline: none; }
+.rowsel tr[data-k], .rowsel .trace-row { cursor: default; }
+.ctx-menu { position: fixed; z-index: 70; min-width: 190px; max-width: 420px; padding: 4px 0; background: var(--bg2);
+  border: 1px solid var(--line2); border-radius: 7px; box-shadow: 0 8px 26px rgba(0,0,0,.35); font-size: 12.5px;
+  color: var(--fg); user-select: none; outline: none; }
+.ctx-item { display: flex; justify-content: space-between; gap: 24px; padding: 4px 12px; white-space: nowrap; cursor: default; }
+.ctx-item span { overflow: hidden; text-overflow: ellipsis; }
+.ctx-item.cur { background: var(--accent2); color: #fff; }
+.ctx-item.dis { color: var(--fg3); }
+.ctx-item kbd { font: inherit; color: var(--fg3); }
+.ctx-item.cur kbd { color: inherit; }
+.ctx-sep { height: 1px; margin: 4px 0; background: var(--line); }
 
 /* status bar */
 .statusbar { display: flex; align-items: center; gap: 10px; padding: 3px 10px; background: var(--bg2);
