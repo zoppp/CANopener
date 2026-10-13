@@ -6,6 +6,11 @@ version's section.
 
 ## Unreleased
 
+### Changed
+
+- The README says CANopener is vibe coded: written with Claude Code, directed by its author, with commits made
+  with Claude marked `Co-Authored-By: Claude`.
+
 ## 2026.10.13.0202 - 2026-10-13
 
 ### Fixed

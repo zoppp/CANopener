@@ -7,6 +7,10 @@ commissioning, plugins and an MCP endpoint for Claude.
 with a real adapter or device yet; the [adapter table](docs/user-guide.md#adapters) shows what has been
 confirmed. Reports from your own hardware are welcome.
 
+**Vibe coded:** CANopener is written with an AI, [Claude Code](https://claude.com/claude-code), directed by its
+author. Commits made with Claude carry a `Co-Authored-By: Claude` line. Every change comes with automated tests on
+the virtual bus and simulator; for real hardware, see the status above.
+
 - **Receive / Transmit**: one row per ID (data, count, cycle time, changed bytes highlighted); transmit list with
   single and cyclic frames.
 - **Trace**: every frame, virtual scrolling, pause, server-side filter; more than 8 000 frames/s (about a full
