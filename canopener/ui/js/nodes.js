@@ -64,10 +64,10 @@
         <td class="r"><button class="btn small" data-act="setid" ${n.recipe_method === "readonly" ? "disabled title=\"read-only device\"" : ""}>Set ID&hellip;</button>
           <button class="btn small" data-act="baud" ${n.baud === "none" ? "disabled title=\"no bit-rate recipe; use Custom\"" : ""}>Bit rate&hellip;</button>
           <button class="btn small ghost" data-act="custom" title="Use this node in the custom sequence editor">Custom</button></td></tr>`).join("") + `</tbody></table>`
-      : `<div class="empty">No CANopen node answered. ${scan.raw_ids.length ? "There is other traffic on the bus (below)." : "No traffic at all - check wiring, termination and bit rate."}</div>`;
+      : `<div class="empty">${scan.pinged === false ? "No heartbeat heard (listen-only: nodes were not asked)." : "No CANopen node answered."} ${scan.raw_ids.length ? "There is other traffic on the bus (below)." : "No traffic at all - check wiring, termination and bit rate."}</div>`;
     CO.$("#nd-other", tabEl).innerHTML = `<div class="small muted" style="margin-top:6px">
       ${scan.raw_ids.length} raw 11-bit id(s) seen${scan.raw_ext_ids.length ? `, ${scan.raw_ext_ids.length} extended id(s)` : ""}.
-      ${scan.pdo_only_ids.length ? `PDO-range traffic without a CANopen node behind it: ${scan.pdo_only_ids.join(", ")}.` : ""}
+      ${!scan.pdo_only_ids.length ? "" : scan.pinged === false ? `PDO-range traffic with no heartbeat (listen-only, not asked; may be nodes with remapped PDOs): ${scan.pdo_only_ids.join(", ")}.` : `PDO-range traffic without a CANopen node behind it: ${scan.pdo_only_ids.join(", ")}.`}
       <details><summary>raw ids</summary><span class="mono">${scan.raw_ids.join(" ")} ${scan.raw_ext_ids.join(" ")}</span></details></div>`;
   }
 

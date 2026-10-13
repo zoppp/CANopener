@@ -24,6 +24,15 @@ log = logging.getLogger(__name__)
 HOST = "127.0.0.1"
 
 
+class PeerResetFilter(logging.Filter):
+    """Windows asyncio (Python 3.11) logs an ERROR with a traceback when it shuts down a socket the other end has
+    already reset, e.g. the window that just closed (WinError 10054 in _call_connection_lost). Nothing is lost:
+    drop that one record, keep every other asyncio error."""
+    def filter(self, record: logging.LogRecord) -> bool:
+        exc = record.exc_info[1] if record.exc_info else None
+        return not (isinstance(exc, ConnectionResetError) and "_call_connection_lost" in record.getMessage())
+
+
 def setup_logging() -> None:
     """Log to logs/canopener.log next to the app (the windowed exe has no console)."""
     fh = logging.handlers.RotatingFileHandler(logs_dir() / "canopener.log", maxBytes=1_000_000, backupCount=3,
@@ -40,6 +49,7 @@ def setup_logging() -> None:
     logging.getLogger("canopener").setLevel(logging.INFO)
     logging.getLogger("canopen").setLevel(logging.CRITICAL)
     logging.getLogger("can").setLevel(logging.ERROR)       # missing vendor libraries are not errors here
+    logging.getLogger("asyncio").addFilter(PeerResetFilter())
 
 
 def probe(port: int, host: str = HOST) -> tuple[str, str | None]:

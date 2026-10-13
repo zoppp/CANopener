@@ -735,7 +735,10 @@ the device name (0x1008).</li>
 the <strong>recipe</strong> CANopener will use to change its node ID and bit rate. Below the table: how many raw 11-bit
 and extended IDs were seen, and PDO-range traffic that has no CANopen node behind it. <strong>raw ids</strong> lists them
 all.</p>
-<p>The scan only reads: it changes nothing on any node. On a listen-only channel it only listens. The job log
+<p>The scan only reads: it changes nothing on any node. On a listen-only channel it only listens: it lists the
+nodes it hears heartbeating and reads no identity. PDO-range traffic is then shown as &quot;not asked&quot;, because a
+node without a heartbeat, or a node whose PDOs use other CAN ids, cannot be told apart from free-form traffic
+without asking. The job log
 under the table shows each step; <strong>Stop</strong> cancels a running job. <strong>Session log...</strong> shows the end of
 <code>logs\nodes.log</code>.</p>
 <h3 id="recipes">Recipes</h3>

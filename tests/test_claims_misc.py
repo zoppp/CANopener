@@ -2,6 +2,7 @@
 frame timestamps), each backed by a test. A claim found false is a strict xfail naming what really happens."""
 
 import json
+import logging
 import os
 import sys
 import textwrap
@@ -508,6 +509,32 @@ def test_probe_tells_canopener_other_program_and_free_port():
             s.server_close()
     free = other.server_address[1]                                            # closed now
     assert desktop.probe(free) == ("free", None)
+
+
+def test_app_log_drops_the_peer_reset_on_window_close_only(caplog):
+    """user-guide 1296 points at logs/canopener.log for problems: closing the window must not put an asyncio
+    ERROR traceback there (WinError 10054 in _call_connection_lost, harmless), but other asyncio errors stay."""
+    import asyncio
+    log = logging.getLogger("asyncio")
+    f = desktop.PeerResetFilter()
+    log.addFilter(f)
+    loop = asyncio.new_event_loop()
+    try:
+        with caplog.at_level(logging.ERROR, logger="asyncio"):
+            for message, exc in (
+                ("Exception in callback _ProactorBasePipeTransport._call_connection_lost(None)",
+                 ConnectionResetError(10054, "An existing connection was forcibly closed by the remote host")),
+                ("Exception in callback something_else()", ConnectionResetError(10054, "reset")),
+                ("Exception in callback _ProactorBasePipeTransport._call_connection_lost(None)", OSError("other")),
+            ):
+                loop.call_exception_handler({"message": message, "exception": exc})    # asyncio's default handler
+    finally:
+        loop.close()
+        log.removeFilter(f)
+    assert [r.getMessage() for r in caplog.records] == [
+        "Exception in callback something_else()",
+        "Exception in callback _ProactorBasePipeTransport._call_connection_lost(None)"]
+    assert isinstance(caplog.records[1].exc_info[1], OSError)
 
 
 # ------------------------------------------------------------------------------------------- frame timestamps

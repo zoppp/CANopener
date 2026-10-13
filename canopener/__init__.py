@@ -1,4 +1,4 @@
 """CANopener: an open-source CAN engineering toolbox (receive, trace, transmit, record/replay, statistics,
 CANopen node commissioning, decoding)."""
 
-__version__ = "2026.10.12.1352"
+__version__ = "2026.10.13.0202"

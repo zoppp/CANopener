@@ -6,6 +6,18 @@ version's section.
 
 ## Unreleased
 
+## 2026.10.13.0202 - 2026-10-13
+
+### Fixed
+
+- DBC and EDS files inside the CANopener folder (such as `decode\`) are saved in `settings.json` and projects
+  relative to that folder, so moving the folder, or copying its settings into a new release folder, keeps the
+  decoders working. Files elsewhere keep their full path. Settings saved by older versions still load.
+- A scan on a listen-only channel no longer says PDO-range traffic has "no CANopen node behind it": it never
+  asked. It now says those ids had no heartbeat and were not asked (they may be nodes whose PDOs use other ids).
+- Closing the window no longer writes a harmless `ConnectionResetError [WinError 10054]` traceback to
+  `logs\canopener.log`.
+
 ## 2026.10.12.1352 - 2026-10-12
 
 ### Added

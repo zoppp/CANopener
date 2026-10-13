@@ -479,7 +479,10 @@ the **recipe** CANopener will use to change its node ID and bit rate. Below the 
 and extended IDs were seen, and PDO-range traffic that has no CANopen node behind it. **raw ids** lists them
 all.
 
-The scan only reads: it changes nothing on any node. On a listen-only channel it only listens. The job log
+The scan only reads: it changes nothing on any node. On a listen-only channel it only listens: it lists the
+nodes it hears heartbeating and reads no identity. PDO-range traffic is then shown as "not asked", because a
+node without a heartbeat, or a node whose PDOs use other CAN ids, cannot be told apart from free-form traffic
+without asking. The job log
 under the table shows each step; **Stop** cancels a running job. **Session log...** shows the end of
 `logs\nodes.log`.
 

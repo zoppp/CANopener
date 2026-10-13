@@ -1,6 +1,8 @@
 """Decoders: DBC (decode, encode, multiplexing, J1939 PGN match), J1939 (id split, TP/BAM, address claim, DM1),
 CANopen (EMCY, heartbeat, PDO decode against the simulator, PDO mapping read over SDO, plans) and throughput."""
 
+import json
+import shutil
 import struct
 import time
 from pathlib import Path
@@ -271,6 +273,42 @@ def test_config_persists_in_settings_and_projects(svc):
         s2.shutdown()
     r = svc.decode.apply_config({"dbc": [{"path": "C:/nope/missing.dbc"}]})
     assert r["errors"] and r["dbc"] == []
+
+
+def test_files_in_the_app_folder_are_saved_relative_and_survive_moving_it(tmp_path, monkeypatch):
+    """settings.json and projects keep DBC/EDS files from the app folder relative to it: copying the folder (or
+    its settings into the next release folder) must not leave the decoders pointing at the old place."""
+    old = tmp_path / "2026.10.12.1352"
+    monkeypatch.setenv("CANOPENER_HOME", str(old))
+    (old / "decode").mkdir(parents=True)
+    for f in (DBC, EDS):
+        shutil.copy(f, old / "decode")
+    s = Service(load_plugins=False)
+    try:
+        s.decode.load_dbc(str(old / "decode" / "test.dbc"))
+        s.decode.assign_eds(5, str(old / "decode" / "test_node.eds"))
+        s.decode.assign_eds(6, EDS)                                    # outside the app folder: stays absolute
+        s.save_project("p")
+        assert s.decode.config()["eds"][0]["path"] == str(old / "decode" / "test_node.eds")   # the UI sees full paths
+    finally:
+        s.shutdown()
+    want = {"dbc": [{"path": "decode/test.dbc", "channel": None}],
+            "eds": [{"node": 5, "path": "decode/test_node.eds", "channel": None},
+                    {"node": 6, "path": EDS, "channel": None}], "j1939": []}
+    assert json.loads((old / "settings.json").read_text(encoding="utf-8"))["decode"] == want
+    assert json.loads((old / "projects" / "p.json").read_text(encoding="utf-8"))["decode"] == want
+
+    new = tmp_path / "moved"
+    shutil.move(str(old), str(new))
+    monkeypatch.setenv("CANOPENER_HOME", str(new))
+    s = Service(load_plugins=False)
+    try:
+        assert s.decode.errors == []
+        assert s.decode.config()["dbc"][0]["path"] == str(new / "decode" / "test.dbc")
+        s.load_project("p")
+        assert s.decode.errors == [] and s.decode.config()["eds"][0]["path"] == str(new / "decode" / "test_node.eds")
+    finally:
+        s.shutdown()
 
 
 # ------------------------------------------------------------------------------------------- throughput

@@ -278,7 +278,7 @@ class Service:
                 "connections": [{**c.cfg.as_dict(), "index": c.index} for c in self.engine.channels.values()
                                 if c.state != "file"],
                 "tx": [self._tx_dict(e) for e in self.engine.tx.entries],
-                "decode": self.decode.config(),
+                "decode": self.decode.config(portable=True),
                 "ui": ui or self.settings.get("ui", {}),
                 "dashboards": self.settings.get("dashboards", []), "raw_signals": self.settings.get("raw_signals", [])}
         self.projects_dir.mkdir(parents=True, exist_ok=True)

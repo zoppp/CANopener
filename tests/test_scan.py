@@ -64,8 +64,29 @@ def test_scan_does_not_list_phantom_node_from_pdo_range_free_form_traffic(channe
 
         assert 10 not in result.nodes
         assert 10 in result.pdo_only_ids
+        assert result.pinged is True
     finally:
         free_form_task.stop()
+        other_bus.shutdown()
+
+
+def test_listen_only_scan_does_not_claim_pdo_ids_have_no_node(channel, network):
+    """A listen-only scan never pings, so a PDO-range id without a heartbeat may still be a node (e.g. one with
+    remapped PDO COB-IDs). It is reported as not asked, never as 'no CANopen node behind it'."""
+    other_bus = can.Bus(interface="virtual", channel=channel, bitrate=250_000)
+    task = other_bus.send_periodic(
+        can.Message(arbitration_id=0x48A, is_extended_id=False, data=b"\x01\x02\x03\x04"), 0.05
+    )
+    lines = []
+    try:
+        result = scan_mod.scan(network, passive_seconds=0.3, log=lines.append, active=False)
+
+        assert 10 in result.pdo_only_ids
+        assert result.pinged is False and result.as_dict()["pinged"] is False
+        text = "\n".join(lines)
+        assert "no CANopen node behind" not in text and "not pinged" in text
+    finally:
+        task.stop()
         other_bus.shutdown()
 
 

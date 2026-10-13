@@ -71,10 +71,12 @@ class ScanResult:
     raw_ext_ids: set
     pdo_only_ids: set
     duration_s: float
+    pinged: bool = True    # False after a listen-only scan: pdo_only_ids were never asked, only not heard heartbeating
 
     def as_dict(self) -> dict:
         return {
             "duration_s": self.duration_s,
+            "pinged": self.pinged,
             "raw_ids": [f"0x{i:03X}" for i in sorted(self.raw_ids)],
             "raw_ext_ids": [f"0x{i:08X}" for i in sorted(self.raw_ext_ids)],
             "pdo_only_ids": sorted(self.pdo_only_ids),
@@ -200,9 +202,12 @@ def scan(
         network.check()
 
         pdo_only_ids = capture.pdo_hint_ids - set(capture.nodes.keys())
-        if pdo_only_ids:
+        if pdo_only_ids and active:
             log(f"  {len(pdo_only_ids)} id(s) had PDO-range traffic but no CANopen node behind them "
                 f"(free-form traffic): {sorted(pdo_only_ids)}")
+        elif pdo_only_ids:
+            log(f"  {len(pdo_only_ids)} id(s) had PDO-range traffic but no heartbeat (listen-only: not pinged, "
+                f"may be nodes with remapped PDOs or free-form traffic): {sorted(pdo_only_ids)}")
 
         log(f"Reading identity + device name for {len(capture.nodes)} node(s) found ..." if active
             else "Listen-only: identity not read")
@@ -220,5 +225,5 @@ def scan(
 
     return ScanResult(
         nodes=capture.nodes, raw_ids=capture.raw_ids, raw_ext_ids=capture.raw_ext_ids,
-        pdo_only_ids=pdo_only_ids, duration_s=passive_seconds,
+        pdo_only_ids=pdo_only_ids, duration_s=passive_seconds, pinged=active,
     )

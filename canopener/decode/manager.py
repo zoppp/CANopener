@@ -12,9 +12,11 @@ import contextlib
 import logging
 import threading
 import time
+from pathlib import Path
 from typing import Optional
 
 from ..core.channel import F_ERR, F_EXT, F_RTR, F_TX, Tap
+from ..paths import app_dir
 from .canopen_od import NMT_COMMANDS, SEQ_TYPES, CanopenDecoder, od_entries, pdos_from_device, value_of
 from .dbc import DbcSet
 from .j1939 import J1939Decoder
@@ -32,6 +34,20 @@ class DecodeError(ValueError):
 def _ch(value) -> Optional[int]:
     """Channel of a config entry: None (or "", "all") means every channel."""
     return None if value in (None, "", "all") else int(value)
+
+
+def _portable(path: str) -> str:
+    """A file inside the app folder is saved relative to it, so the folder can be moved or its settings copied
+    into a new release folder."""
+    try:
+        return Path(path).resolve().relative_to(app_dir().resolve()).as_posix()
+    except ValueError:
+        return path
+
+
+def _resolve(path: str) -> str:
+    p = Path(path)
+    return str(p if p.is_absolute() else app_dir() / p)
 
 
 class DecodeManager:
@@ -123,13 +139,16 @@ class DecodeManager:
         return self._dbc(m, ch, ts, m.msg.frame_id, data, f"j1939/{sa}/{pgn}.") if m else None
 
     # ------------------------------------------------------------------ configuration
-    def config(self) -> dict:
-        return {"dbc": [{"path": f["path"], "channel": f["channel"]} for f in self.dbc.files],
-                "eds": [{"node": n.node, "path": n.path, "channel": n.channel} for n in self.canopen.nodes.values()],
+    def config(self, portable: bool = False) -> dict:
+        """portable=True for settings and projects: paths inside the app folder are made relative to it."""
+        fix = _portable if portable else str
+        return {"dbc": [{"path": fix(f["path"]), "channel": f["channel"]} for f in self.dbc.files],
+                "eds": [{"node": n.node, "path": fix(n.path), "channel": n.channel}
+                        for n in self.canopen.nodes.values()],
                 "j1939": sorted(self.j1939_channels)}
 
     def _save(self) -> None:
-        self.svc.settings["decode"] = self.config()
+        self.svc.settings["decode"] = self.config(portable=True)
         self.svc.save_settings()
 
     def apply_config(self, cfg: dict, save: bool = True) -> dict:
@@ -142,12 +161,12 @@ class DecodeManager:
             self.j1939_channels = {int(c) for c in cfg.get("j1939", [])}
             for d in cfg.get("dbc", []):
                 try:
-                    self.dbc.load(d["path"], _ch(d.get("channel")))
+                    self.dbc.load(_resolve(d["path"]), _ch(d.get("channel")))
                 except (ValueError, KeyError) as exc:
                     errors.append(f"DBC {d.get('path')}: {exc}")
             for e in cfg.get("eds", []):
                 try:
-                    self.canopen.assign(int(e["node"]), e["path"], _ch(e.get("channel")))
+                    self.canopen.assign(int(e["node"]), _resolve(e["path"]), _ch(e.get("channel")))
                 except (ValueError, KeyError) as exc:
                     errors.append(f"EDS node {e.get('node')}: {exc}")
             self.texts.clear()
