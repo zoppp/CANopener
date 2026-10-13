@@ -5,8 +5,9 @@ tried yet). It is built to replace PCAN-View (receive list, transmit list, trace
 statistics) with many adapters, and adds CANopen node commissioning, DBC / CANopen / J1939 decoding, dashboards,
 plugins and an MCP endpoint, so Claude can read the bus and, with your approval, act on it.
 
-CANopener has not yet been tested with real adapters or devices: everything so far was tested on its virtual bus
-and simulator. The [Adapters](#adapters) table shows what has been confirmed. Where this guide describes how an
+CANopener has been tested on one real bus so far: a Kvaser adapter receiving on a live 250 kbit/s machine bus.
+Everything else was tested on its virtual bus and simulator. The [Adapters](#adapters) table shows what has been
+confirmed. Where this guide describes how an
 adapter or a real bus behaves, read it as what CANopener asks the driver for, until a test confirms it.
 
 Most of this guide can be tried without hardware: CANopener has a built-in simulator with three made-up
@@ -128,7 +129,7 @@ use one of them, a report of what works and what does not helps (an issue on the
 | Adapter | Interface | Channel | Tested | Notes |
 |---|---|---|---|---|
 | PEAK PCAN-USB | PEAK PCAN-USB | `PCAN_USBBUS1`, `PCAN_USBBUS2`, ... | Not yet | Needs the PEAK driver. Listen-only and CAN FD. |
-| Kvaser | Kvaser | `0`, `1`, ... | Not yet | Needs the Kvaser driver. Listen-only (silent mode) and CAN FD. |
+| Kvaser | Kvaser | `0`, `1`, ... | Yes, receiving | Needs the Kvaser driver. Listen-only (silent mode) and CAN FD. Tested on a live 250 kbit/s machine bus (classic CAN): receiving, a node scan, CANopen decoding, about 2 hours connected. Not yet tested: sending, CAN FD, other bit rates, and whether listen-only really sends nothing. |
 | CANable with slcan firmware | CANable / slcan (COM port) | the COM port, for example `COM5` | Not yet | Listen-only. CAN FD (CANable 2) with a data bit rate of 2 or 5 Mbit/s only. |
 | CANable with candleLight firmware | CANable / candleLight (USB) | `0` | Not yet | A USB device; libusb is included. Classic CAN only, no listen-only. |
 | Vector | Vector | the driver's global channel index, `0`, `1`, ... | Not yet | Needs the Vector driver library. Listen-only and CAN FD. |
@@ -1350,8 +1351,8 @@ means another MCP address) and run `claude mcp list`.
 ## FAQ
 
 **Does CANopener replace PCAN-View?** That is the goal: receive list, transmit list, trace, recording in the
-`.trc` format, statistics, with PEAK and many other adapters. It has not yet been tested with real adapters, so
-it is not yet confirmed (see [Adapters](#adapters)).
+`.trc` format, statistics, with PEAK and many other adapters. So far only a Kvaser has been tested on a real
+bus, and only receiving, so it is not yet confirmed (see [Adapters](#adapters)).
 
 **Can it damage a device?** Watching with an adapter in listen-only mode should not disturb the bus (not yet
 confirmed on hardware). Without listen-only, the adapter acknowledges frames like any node. Sending can, like any

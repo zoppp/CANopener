@@ -6,10 +6,15 @@ version's section.
 
 ## Unreleased
 
+## 2026.10.13.0225 - 2026-10-13
+
 ### Changed
 
 - The README says CANopener is vibe coded: written with Claude Code, directed by its author, with commits made
   with Claude marked `Co-Authored-By: Claude`.
+- Kvaser is marked tested in the adapter table, for receiving: it ran on a live 250 kbit/s machine bus (receiving,
+  a node scan, CANopen decoding, about 2 hours connected). Sending, CAN FD, other bit rates and whether
+  listen-only really sends nothing are not tested yet. The README and user guide say so.
 
 ## 2026.10.13.0202 - 2026-10-13
 

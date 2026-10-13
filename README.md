@@ -3,9 +3,10 @@
 An open-source CAN engineering toolbox, built to replace PCAN-View with many adapters, plus CANopen node
 commissioning, plugins and an MCP endpoint for Claude.
 
-**Status:** everything below is tested on CANopener's virtual bus and simulator only. Nothing has been tested
-with a real adapter or device yet; the [adapter table](docs/user-guide.md#adapters) shows what has been
-confirmed. Reports from your own hardware are welcome.
+**Status:** everything below is tested on CANopener's virtual bus and simulator. On real hardware, only a Kvaser
+adapter has been tested so far: receiving on a live 250 kbit/s machine bus. The
+[adapter table](docs/user-guide.md#adapters) shows what has been confirmed. Reports from your own hardware are
+welcome.
 
 **Vibe coded:** CANopener is written with an AI, [Claude Code](https://claude.com/claude-code), directed by its
 author. Commits made with Claude carry a `Co-Authored-By: Claude` line. Every change comes with automated tests on
@@ -30,8 +31,8 @@ the virtual bus and simulator; for real hardware, see the status above.
 - **Dashboards**: time and XY plots, gauges, numbers and lamps from any decoded signal, or from quick signals
   defined on raw frames without a DBC.
 - **Adapters**: backends for PEAK PCAN, Kvaser, CANable (slcan and candleLight/gs_usb, libusb bundled), Vector,
-  IXXAT, SocketCAN and virtual, with CAN FD settings where the backend has them; several channels at once. None
-  tested on hardware yet. ESP32 (GVRET), WiFi slcan
+  IXXAT, SocketCAN and virtual, with CAN FD settings where the backend has them; several channels at once. Only
+  Kvaser tested on hardware so far (receiving at 250 kbit/s). ESP32 (GVRET), WiFi slcan
   and ELM327/OBDLink support is planned but untested: [help wanted](docs/user-guide.md#more-adapters-help-wanted).
 - **Plugins**: tabs, REST routes, MCP tools and live frame consumers ([docs/PLUGINS.md](docs/PLUGINS.md)).
 - **Claude**: MCP at `http://127.0.0.1:8775/mcp/`; read tools (and scans, which send only SDO read requests, plus an SDO abort to node ids that do not answer) can be allowlisted in Claude Code; keep changes to nodes and your own frames on approval there.
