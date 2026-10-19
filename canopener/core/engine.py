@@ -129,6 +129,10 @@ class Engine:
             return ch
 
     def disconnect(self, index: int) -> None:
+        for e in self.tx.entries:
+            if e.channel == int(index):
+                e.enabled = False
+        self.tx._settle()            # a cyclic send under way ends on this adapter, not on the next one connected
         with self._lock:
             ch = self.channels.pop(int(index), None)
             if ch is None:
@@ -136,6 +140,11 @@ class Engine:
             for e in self.tx.entries:
                 if e.channel == ch.index:
                     e.enabled = False
+            # a replay onto this channel stops with it: else it would go on onto the next adapter at this index
+            p = self.player
+            if p is not None and p.state in ("playing", "paused") and ch.index in p.bus_map.values():
+                p.stop()
+                self.event(f"replay of {p.path.name} stopped: {ch.name} disconnected")
             if self.recorder is not None:
                 ch.remove_recorder(self.recorder)
             ch.close()

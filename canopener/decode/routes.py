@@ -14,7 +14,7 @@ from typing import Any, Optional
 from fastapi import Body, File, Form, UploadFile
 from fastapi.concurrency import run_in_threadpool
 
-from ..core.transmit import parse_id
+from ..core.transmit import parse_bool, parse_id
 from ..paths import app_dir
 
 Out = dict[str, Any]
@@ -43,6 +43,23 @@ def _save_upload(name: str, content: bytes) -> Path:
     if not target.exists():
         target.write_bytes(content)
     return target
+
+
+def _native_dialog(kind: str) -> dict:
+    """A Windows file/folder dialog over the app window, for a full path the server can use (an upload only
+    gives the content). {"available": False} in a browser (`canopener serve`): the UI then asks for a typed path."""
+    try:
+        import webview
+    except ImportError:
+        return {"available": False}
+    if not webview.windows:
+        return {"available": False}
+    if kind == "folder":
+        picked = webview.windows[0].create_file_dialog(webview.FileDialog.FOLDER)
+    else:
+        picked = webview.windows[0].create_file_dialog(
+            webview.FileDialog.OPEN, file_types=("EDS / DCF / XDD files (*.eds;*.dcf;*.xdd)", "All files (*.*)"))
+    return {"available": True, "paths": [str(p) for p in (picked or [])]}
 
 
 def register(app, svc) -> None:
@@ -78,6 +95,14 @@ def register(app, svc) -> None:
         dec.remove_dbc(body.get("path", ""), body.get("channel"))
         return {"ok": True}
 
+    @app.get("/api/decode/dbc/live")
+    async def dbc_live():
+        return await call(dec.dbc_live)
+
+    @app.get("/api/decode/dbc/message")
+    async def dbc_message(name: str):
+        return await call(dec.dbc_message, name)
+
     @app.post("/api/decode/dbc/encode")
     async def dbc_encode(body: dict = Body(...)):
         return dec.encode(body.get("message", ""), body.get("signals") or {})
@@ -87,9 +112,13 @@ def register(app, svc) -> None:
     async def j1939_info():
         return dec.j1939_info()
 
+    @app.get("/api/decode/j1939/source")
+    async def j1939_source(sa: int, channel: str = ""):
+        return await call(dec.j1939_source, sa, channel)
+
     @app.post("/api/decode/j1939")
     async def j1939_set(body: dict = Body(...)):
-        return {"channels": dec.set_j1939(int(body.get("channel", 0)), bool(body.get("enabled", True)))}
+        return {"channels": dec.set_j1939(int(body.get("channel", 0)), parse_bool(body.get("enabled", True), "enabled"))}
 
     # ---------------------------------------------------------------- CANopen
     @app.get("/api/decode/canopen")
@@ -109,6 +138,39 @@ def register(app, svc) -> None:
     async def eds_remove(body: dict = Body(...)):
         dec.remove_eds(int(body["node"]), body.get("channel"))
         return {"ok": True}
+
+    @app.post("/api/decode/canopen/sdo_server")
+    async def sdo_server_add(body: dict = Body(...)):
+        return dec.add_sdo_server(int(body["node"]), body["request"], body["response"], body.get("channel"))
+
+    @app.post("/api/decode/canopen/sdo_server/remove")
+    async def sdo_server_remove(body: dict = Body(...)):
+        dec.remove_sdo_server(int(body["node"]), body["request"], body.get("channel"))
+        return {"ok": True}
+
+    @app.get("/api/decode/canopen/eds/folders")
+    async def eds_folders():
+        return await call(dec.eds_library)
+
+    @app.post("/api/decode/canopen/eds/folders")
+    async def eds_folders_set(body: dict = Body(...)):
+        return await call(dec.set_eds_folders, list(body.get("folders") or []))
+
+    @app.post("/api/decode/canopen/eds/candidates")      # POST: it may read 0x1018 over SDO (sends on the bus),
+    async def eds_candidates(body: dict = Body(...)):      # so the cross-site check applies (a GET would not)
+        return await call(dec.eds_candidates, int(body.get("node", 0)), int(body.get("channel", 0)))
+
+    @app.post("/api/decode/canopen/eds/auto")
+    async def eds_auto():
+        return await call(dec.auto_assign_eds)
+
+    @app.post("/api/decode/browse")
+    async def browse(body: dict = Body(...)):
+        return await call(_native_dialog, str(body.get("kind", "file")))
+
+    @app.get("/api/decode/canopen/node")
+    async def canopen_node(node: int, channel: str = ""):
+        return await call(dec.canopen_node, node, channel)
 
     @app.get("/api/decode/canopen/od")
     async def canopen_od(node: int, channel: int = 0):
@@ -134,8 +196,8 @@ def register(app, svc) -> None:
                           str(body.get("command", "")))
 
     @app.post("/api/decode/clear")
-    async def decode_clear():
-        dec.clear_logs()
+    async def decode_clear(body: dict = Body(None)):
+        dec.clear_logs(str((body or {}).get("what") or ""))
         return {"ok": True}
 
 
@@ -144,7 +206,8 @@ def register_mcp(mcp, svc, run) -> None:
 
     @mcp.tool()
     def get_decode_config() -> Out:
-        """Decoder setup: loaded DBC files (per channel or all), EDS/XDD per CANopen node, J1939 channels, counters."""
+        """Decoder setup: loaded DBC files (per channel or all), EDS/XDD per CANopen node, extra SDO servers, J1939
+        channels, counters."""
         return {**dec.config(), **dec.status()}
 
     @mcp.tool()
@@ -175,6 +238,38 @@ def register_mcp(mcp, svc, run) -> None:
     def get_canopen_state() -> Out:
         """CANopen decoding: EDS/XDD per node with its PDOs, NMT state per node (heartbeats), EMCY log."""
         return dec.canopen_info()
+
+    @mcp.tool()
+    def get_pdo_values(node: int, channel: Optional[int] = None) -> Out:
+        """The PDOs of a CANopen node with every mapped object (index:sub, bit position, raw and decoded value, unit,
+        range), last seen and period, from the last frame of each PDO. Without an EDS: the frames on the predefined
+        PDO ids, undecoded. channel None = every channel."""
+        def go():
+            d = dec.canopen_node(node, channel)
+            return {"node": node, "eds": d["eds"], "pdos": d["pdos"]}
+        return run(go)
+
+    @mcp.tool()
+    def get_sdo_log(node: int, channel: Optional[int] = None, limit: int = 100) -> Out:
+        """SDO transfers of a CANopen node seen on the bus, newest first: source ("bus" = another master, "CANopener"
+        = this tool), read/write, index:sub, name, value, result (ok / abort code and text). Also the last value
+        seen per object ("index:sub", decimal). channel None = every channel."""
+        def go():
+            d = dec.canopen_node(node, channel)
+            return {"node": node, "sdo": d["sdo"][:max(1, limit)], "values": d["values"]}
+        return run(go)
+
+    @mcp.tool()
+    def get_dbc_message_values(name: str) -> Out:
+        """One DBC message: every signal decoded from its last frame (raw and scaled value, unit, range, value
+        name), with last seen, period and data."""
+        return run(dec.dbc_message, name)
+
+    @mcp.tool()
+    def get_j1939_source(sa: int, channel: Optional[int] = None) -> Out:
+        """One J1939 source address: the PGNs it sends (last frame, period, signals when a J1939 DBC covers the
+        PGN), its address claim and its reassembled TP messages. channel None = every J1939 channel."""
+        return run(dec.j1939_source, sa, channel)
 
     @mcp.tool()
     def list_object_dictionary(node: int, channel: int = 0, name_filter: str = "") -> Out:
@@ -216,6 +311,18 @@ def register_mcp(mcp, svc, run) -> None:
     def assign_eds_file(node: int, path: str, channel: Optional[int] = None) -> Out:
         """Assign an EDS/DCF/XDD file (full path) to a CANopen node id for PDO decoding and the SDO browser."""
         return run(dec.assign_eds, node, path, channel)
+
+    @mcp.tool()
+    def add_sdo_server(node: int, request_cob_id: str, response_cob_id: str, channel: Optional[int] = None) -> Out:
+        """Follow a node's SDO transfers on another COB-ID pair too, for a second SDO server (0x1201...) such as
+        request 0x627 / response 0x5A7 for node 7: the SDO log (get_sdo_log) then shows them under that node, decoded
+        with its EDS. COB-IDs in hex. Only changes what the decoder listens to; nothing is sent."""
+        return run(dec.add_sdo_server, node, request_cob_id, response_cob_id, channel)
+
+    @mcp.tool()
+    def remove_sdo_server(node: int, request_cob_id: str, channel: Optional[int] = None) -> Out:
+        """Stop following an extra SDO server added with add_sdo_server (same node, request COB-ID and channel)."""
+        return run(lambda: (dec.remove_sdo_server(node, request_cob_id, channel), {"ok": True})[1])
 
     @mcp.tool()
     def set_j1939_decoding(channel: int, enabled: bool = True) -> Out:

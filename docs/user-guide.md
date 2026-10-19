@@ -5,7 +5,8 @@ tried yet). It is built to replace PCAN-View (receive list, transmit list, trace
 statistics) with many adapters, and adds CANopen node commissioning, DBC / CANopen / J1939 decoding, dashboards,
 plugins and an MCP endpoint, so Claude can read the bus and, with your approval, act on it.
 
-CANopener has been tested on one real bus so far: a Kvaser adapter receiving on a live 250 kbit/s machine bus.
+CANopener has been tested on one real bus so far: a Kvaser adapter receiving, and sending by replay, on a live
+250 kbit/s machine bus.
 Everything else was tested on its virtual bus and simulator. The [Adapters](#adapters) table shows what has been
 confirmed. Where this guide describes how an
 adapter or a real bus behaves, read it as what CANopener asks the driver for, until a test confirms it.
@@ -129,13 +130,19 @@ use one of them, a report of what works and what does not helps (an issue on the
 | Adapter | Interface | Channel | Tested | Notes |
 |---|---|---|---|---|
 | PEAK PCAN-USB | PEAK PCAN-USB | `PCAN_USBBUS1`, `PCAN_USBBUS2`, ... | Not yet | Needs the PEAK driver. Listen-only and CAN FD. |
-| Kvaser | Kvaser | `0`, `1`, ... | Yes, receiving | Needs the Kvaser driver. Listen-only (silent mode) and CAN FD. Tested on a live 250 kbit/s machine bus (classic CAN): receiving, a node scan, CANopen decoding, about 2 hours connected. Not yet tested: sending, CAN FD, other bit rates, and whether listen-only really sends nothing. |
+| Kvaser | Kvaser | `0`, `1`, ... | Yes, receiving and sending (replay) | Needs the Kvaser driver. Listen-only (silent mode) and CAN FD. Tested on a live 250 kbit/s machine bus (classic CAN), with the machine's controller counting frames as an independent check. Receiving: a listen-only recording of about 11 minutes matched the controller's own capture (the same count, 0 differing frames), and bursts of up to 64 back-to-back frames were recorded completely. Sending: replays of 11-bit and 29-bit frames, every 10 ms, all arrived in order with none missing; replays at 500 and 1000 frames/s for a minute arrived without measurable loss. Also a node scan, CANopen decoding, and several hours connected. Not yet tested: the transmit list (single and cyclic frames), CAN FD, other bit rates, and whether listen-only really sends nothing. |
 | CANable with slcan firmware | CANable / slcan (COM port) | the COM port, for example `COM5` | Not yet | Listen-only. CAN FD (CANable 2) with a data bit rate of 2 or 5 Mbit/s only. |
 | CANable with candleLight firmware | CANable / candleLight (USB) | `0` | Not yet | A USB device; libusb is included. Classic CAN only, no listen-only. |
 | Vector | Vector | the driver's global channel index, `0`, `1`, ... | Not yet | Needs the Vector driver library. Listen-only and CAN FD. |
 | IXXAT | IXXAT | `0`, `1`, ... | Not yet | Needs the IXXAT VCI driver. CAN FD; no listen-only. |
 | Linux SocketCAN | Linux SocketCAN | `can0`, ... | Not yet | Linux only (from source). Set the bit rate in the operating system (`ip link`); the bit rate field is disabled. |
 | Virtual | Virtual (no hardware) | any name, default `canopener` | Yes (the test suite runs on it) | A bus inside CANopener for trying things and for tests. |
+
+**Two programs on one Kvaser channel.** A Kvaser channel can be open in several programs at once (for example
+CANopener and another tool, or the app and `canopener-cli`). Seen on the live-bus test: frames that one program
+sends do not appear in the other's receive list or recording. CANopener does show its own sends (marked Tx). To
+record what another program on the same adapter sends, or what you replay with the command line while the app is
+recording, record on a second adapter or channel.
 
 A CANable runs one of two firmwares: slcan boards normally show up in Device Manager as a COM port, candleLight
 boards as a USB device. CANopener has a backend for each.
@@ -327,7 +334,7 @@ The transmit dialog:
 
 ![Editing a transmit entry in DBC message mode](img/tx-dbc.png)
 
-- **ID (hex)**, **Channel**, **Cycle time ms (0 = manual)**.
+- **ID (hex)**, **Channel**, **Cycle time ms (0 = manual)**; a cyclic entry needs at least 1 ms.
 - **Extended (29-bit)**, **CAN FD**, **Bit rate switch** (FD only), **Remote request** (then a **Remote request
   DLC** field appears).
 - **Data from**: appears once a DBC file is loaded (see [Decode](#decode-dbc-canopen-j1939)). Choose **raw
@@ -431,10 +438,14 @@ A file channel never transmits and needs no adapter. Close it with the **×** on
 - **Bus 1 of the file onto**: the connected channel to send on;
 - **Speed**: 0.5x, 1x (recorded timing), 2x or 10x;
 - **Frames**: all, recorded Rx only, or recorded Tx only;
-- **Loop**: start over at the end.
+- **Loop**: start over at the end, one typical frame gap after the last frame. A file whose pass would take
+  under 10 ms at the chosen speed is not looped (it would send its frames back to back).
 
 Replay transmits every recorded frame onto the bus. Make sure that is safe for the machine. The Replay card
 shows the progress, with **Pause** / **Resume** and **Stop**.
+
+On a real bus, replay has been tested with a Kvaser at 250 kbit/s, from the command line (see
+[Adapters](#adapters)).
 
 ## Statistics
 
@@ -484,7 +495,10 @@ The scan only reads: it changes nothing on any node. On a listen-only channel it
 nodes it hears heartbeating and reads no identity. PDO-range traffic is then shown as "not asked", because a
 node without a heartbeat, or a node whose PDOs use other CAN ids, cannot be told apart from free-form traffic
 without asking. The job log
-under the table shows each step; **Stop** cancels a running job. **Session log...** shows the end of
+under the table shows each step; **Stop** cancels a running job before its next step. A bit-rate change
+ignores **Stop** after the node reset or LSS activate, until the adapter has reopened at the new rate. When a
+job stops or fails after it wrote something, the message lists what was already sent: a stored value can still
+take effect at the device's next reset or power cycle. **Session log...** shows the end of
 `logs\nodes.log`.
 
 ### Recipes
@@ -498,14 +512,16 @@ A recipe says how a device changes its node ID (and bit rate). CANopener picks i
 
 CANopener ships no recipes for real devices, only those of the simulator's demo devices. For your devices,
 build the sequence in the [custom mode](#custom-mode-for-unknown-devices) and **Save as recipe**. From then on
-**Set ID...** and **Bit rate...** use it automatically.
+**Set ID...** and **Bit rate...** use it automatically. A saved recipe applies to every product of that
+vendor, and the preview says so.
 
 ### Set ID
 
 **Set ID...** on a node row asks for:
 
 - **New node ID (1..127)**;
-- **Method**: automatic (by vendor id), LSS, or a named recipe;
+- **Method**: automatic (by vendor id), LSS, or a named recipe (the preview warns when the recipe was written for
+  another vendor or product than the device reports);
 - **Verify timeout s**: how long to wait for the node to answer at its new id.
 
 **Preview** then shows the plan:
@@ -518,6 +534,16 @@ build the sequence in the [custom mode](#custom-mode-for-unknown-devices) and **
 - every step with the **exact frames** that will be sent, including the conditional ones (the SDO abort after
   a timeout, the polls of the new id), and the reply each step expects.
 
+A new id that the scan found in use by another node is refused, not only warned about.
+
+For a device with a vendor or sequence recipe, the first steps read its identity (0x1018 vendor, product, serial)
+at the old id. If another device now sits there (a swapped module, or another machine since the scan), the run
+stops before anything is written. The check at the new id also reads 0x1018. Only an answer from the device that
+was moved counts as verified, not any device that happens to answer at that id. The check compares what the scan
+read: the product only if the scan read one, the serial number only if it is not 0. Two devices of the same model
+that report no serial number cannot be told apart this way. A failed check at the new id is reported as "could
+not verify", not as an error.
+
 Steps marked **always** also run after a failure (cleanup, for example LSS back to waiting). Steps marked
 **optional** only warn when they fail.
 
@@ -525,7 +551,8 @@ Nothing is sent until you tick **I checked the frames above and want to send the
 shows live in the job log, the result shows under it (verified at the new id, or "power cycle required"), and
 the whole run is appended to `logs\nodes.log`.
 
-A scan is needed first: the conflict check and the recipe come from it.
+A scan is needed first: the conflict check and the recipe come from it. Reconnecting the adapter makes the last
+scan stale; scan again.
 
 ### Bit rate
 
@@ -536,7 +563,9 @@ devices...** switches every LSS device on the bus at once. The dialog asks for:
 - **LSS switch delay ms**;
 - **Verify timeout s**.
 
-The preview shows the frames as for Set ID. The sequence is configure, store, then activate. After the switch
+The preview shows the frames as for Set ID. An SDO or sequence recipe first reads the node's identity (0x1018),
+as Set ID does, and stops before writing if another device answers. The sequence is configure, store, then
+activate. After the switch
 the adapter reopens at the new rate and waits for traffic. Nodes that did not switch stay at the old rate and
 are no longer heard; the preview warns about this. Bit-rate changes have been tested on the simulator only, not
 yet on a real device.
@@ -589,36 +618,81 @@ The **Decode** tab has three views, **DBC**, **CANopen** and **J1939**. Decoded 
 - on this tab;
 - as signals for [dashboards](#dashboards) and for Claude.
 
-The decoder setup (DBC files, EDS per node, J1939 channels) is saved with the settings and in projects.
+The decoder setup (DBC files, EDS per node, extra SDO servers, J1939 channels) is saved with the settings and in
+projects.
 
 ### DBC
 
-![DBC view with live signal values](img/decode-dbc.png)
+![DBC view: the message list and one message's signals](img/decode-dbc.png)
 
 - Give the full path of a `.dbc` file and click **Load**, or **Upload...** one. Choose **All channels** or one
   channel. Several files can be loaded; **×** unloads one.
-- The **Signals** table lists every message and signal with its live value, unit and range (and the named
-  values). Type into the filter to find a message or signal.
-- Multiplexed messages decode (the multiplexer and the signals of the active multiplexer value).
+- The **Messages** table lists every message of the loaded files: ID (and PGN for J1939 messages), number of
+  signals, and from the bus its period, when it was last seen (**stopped** when no frame came for more than 3
+  periods) and the data of the last frame. Type into the filter to find a message, or a message by one of its
+  signals.
+- Click a message for its signals, live: value (with its named value), raw value, unit, range and the named
+  values. Click it again, or **Close**, to close it.
+- Multiplexed messages decode (the multiplexer and the signals of the active multiplexer value); the other
+  multiplexed signals have no value until a frame carries them.
 - J1939 messages of a DBC (frame format J1939PG) match by PGN on channels with J1939 on, so every source
-  address decodes; the value column then shows one value per source address (`SA 0: ...`).
+  address decodes. The message shows the last frame of any source address; the **J1939** view shows each source
+  address on its own.
 
 With a DBC loaded, the transmit dialog has the **DBC message** mode: see
 [Decode with a DBC and transmit by signal value](#decode-with-a-dbc-and-transmit-by-signal-value).
 
 ### CANopen
 
-![CANopen view: EDS on node 5, its object dictionary with values read from the device, and the EMCY log](img/decode-canopen.png)
+![CANopen view: node 5 selected, with its PDO objects, the SDO log and the object dictionary](img/decode-canopen.png)
 
 - Set the **Node** id, the channel, and give the path of an `.eds`, `.dcf` or `.xdd` file: **Assign**, or
   **Upload...**.
-- The node table lists the nodes with a file and the nodes seen sending heartbeats (marked "no EDS"), their
-  PDOs and their NMT state from the heartbeats.
+- **EDS folders...** sets the folders with your EDS / DCF / XDD files (subfolders too). It is an app setting,
+  not part of a project. In the app window **Browse...** opens a folder picker; in a browser, type or paste the
+  path.
+- Right-click a node row (here, or on the **Nodes** tab after a scan) and choose **Assign EDS file...**. The
+  dialog shows the node's vendor id, product code and revision, from the last scan or read from the node over
+  SDO (object 0x1018, reads only). It lists the files of the EDS folders, the ones that fit the node first:
+  **vendor + product + revision**, then **vendor + product**, then **vendor only**. Pick one, or give any other
+  file by path, **Browse...** or **Upload...**.
+- **Auto-assign** does this for every node without a file, nodes seen by heartbeat or by the last scan. A file
+  is assigned only when it is clear which one: one file fits the vendor id and product code, or one of them
+  also fits the revision. Copies of the same file count once. When several different files fit, or only the
+  vendor id fits, the node is left for you to pick in its **Assign EDS file...** dialog. Nodes that already
+  have a file keep it.
+- The node table lists the nodes with a file, the nodes seen sending heartbeats (marked "no EDS") and the nodes
+  with an extra SDO server, their PDOs and their NMT state from the heartbeats.
 - PDOs decode from the file's mapping. **Read PDO mapping** reads the device's real mapping over SDO (uploads
   only) and decodes with that instead (marked **from device**).
-- **Objects...** opens the object dictionary browser: index, sub, name, type, access, default, and the value.
-  **Read** reads one object from the device. **Write...** asks for a value and opens the exact-frame preview.
-  The filter finds objects by name or index.
+- Click a node row for its panel below the table (click it again, or **Close**, to close it). It shows:
+  - **PDOs**: each TPDO and RPDO with its COB-ID, period, when it was last seen (**stopped** when no frame came
+    for more than 3 periods), Rx or Tx and the data of the last frame; under it every mapped object with its
+    index:sub, its bits in the frame, name, value (with its named value from the file), raw value, unit and
+    range. The values update twice a second.
+  - **SDO log**: the SDO transfers with the node seen on the bus, newest first. **Source** says who asked:
+    **bus** (another master, a PLC, another tool) or **CANopener** (Read, sequences, Claude). Expedited and
+    segmented reads and writes are reassembled and decoded with the file (without a file: the CiA 301 names
+    of 0x1000-0x1FFF and the bytes). An object that is a single variable in the file has its name on sub 0
+    only; other subs of it show as unknown (index:sub) with their bytes. Aborts show the abort code and its meaning; block transfers are listed
+    but not decoded. **Clear** empties it.
+  - **Object dictionary** (click to open): index, sub, name, type, access, default, and the value: the last
+    value read or seen in SDO traffic, with how long ago and from whom. **Read** reads one object from the
+    device. **Write...** asks for a value and opens the exact-frame preview. The filter finds objects by name or
+    index.
+- A node without a file (seen by heartbeat) has a panel too: the frames on the predefined PDO ids (TPDO
+  0x180/0x280/0x380/0x480 and RPDO 0x200/0x300/0x400/0x500 + node id), not decoded, and its SDO log.
+- SDO traffic is only followed for nodes with a file or a heartbeat, and for transfers CANopener starts, as
+  other protocols can use the same IDs.
+- **SDO servers...** adds extra SDO servers. A node can have a second SDO server (0x1201...) that another tool
+  talks to on other COB-IDs, for example request 0x627 and response 0x5A7 for node 7. Those ids look like the
+  default SDO ids of node 39, so they are not followed by themselves. Give the node, the channel (or all) and the
+  request and response COB-ID (hex), then **Add**. Its transfers then show in that node's SDO log, decoded with
+  its file, with the pair next to read/write. The list is saved with the settings and in projects. Nothing is
+  sent; **&times;** removes a pair.
+- When only the reply of a transfer is seen, it is logged as far as the reply tells: an expedited read with its
+  value, a write as **request not seen** (written, value unknown). This happens with two programs on one Kvaser
+  channel (see [Adapters](#adapters)): CANopener sees the replies but not the other program's requests.
 - **Start**, **Stop**, **Pre-op** and **Reset** send NMT commands to the node, after the same preview.
 - The **EMCY log** decodes emergency messages: the error code with its meaning, the error register bits and the
   vendor-specific bytes. **Clear** empties it (and the J1939 transport-protocol list).
@@ -634,8 +708,12 @@ Tick **J1939 decoding on** for each channel that carries J1939. Then:
 
 - 29-bit IDs split into priority, PGN, destination and source address; the receive list's Decoded column shows
   the PGN name and addresses.
-- **ECUs (address claims)** lists every address claim with its NAME decoded: identity number, manufacturer
-  code, function, ECU and function instance, vehicle system, industry group, arbitrary address capability.
+- **ECUs (source addresses)** lists every source address seen on the J1939 channels: how many frames, when
+  the last came, and its address claim with the NAME decoded (identity number, manufacturer code, function, ECU
+  and function instance, vehicle system, industry group, arbitrary address capability), or "no address claim
+  seen".
+- Click a source address for the PGNs it sends: name, priority, destination, period, last seen and the last
+  frame's data, decoded when a J1939 DBC covers the PGN; and its reassembled transport-protocol messages.
 - **DM1 active diagnostic trouble codes** shows the lamps (MIL, RSL, AWL, PL; lit when on) and the active DTCs
   (SPN, FMI, occurrence count) per ECU.
 - **Transport protocol messages** lists messages longer than 8 bytes, reassembled from RTS/CTS and BAM
@@ -910,7 +988,7 @@ theme:
 
 - the transmit list;
 - the adapter settings of the connected channels;
-- the decoder setup (DBC files, EDS per node, J1939 channels);
+- the decoder setup (DBC files, EDS per node, extra SDO servers, J1939 channels);
 - the dashboards and quick signals.
 
 **Save** stores the current setup under the name you type. **Open** loads a saved project: cyclic transmits
@@ -1057,8 +1135,8 @@ recipe on their PC.
 ### Decode with a DBC and transmit by signal value
 
 1. On **Decode** > **DBC**, give the path of the `.dbc` file and click **Load** (or **Upload...**).
-2. The **Signals** table shows live values. The receive list's **Decoded** column shows the decoded messages
-   (tick **show Tx** to see your own frames decoded too).
+2. Click a message in the **Messages** table for its signals, live. The receive list's **Decoded** column
+   shows the decoded messages (tick **show Tx** to see your own frames decoded too).
 3. To send by signal value: **+ New** under Transmit. In **Data from**, choose **DBC message ...**.
 4. Type the signal values (lists for named values). The ID comes from the DBC; the bytes are encoded when
    you click **Add** and show in the transmit row.
@@ -1074,8 +1152,8 @@ To change a value while it is sending, click **Edit**, change the signal, **Save
    `TPDO1 node 5 Position=485 Counter=2290`) and as `canopen/<node>/...` signals for dashboards.
 3. If the device's mapping differs from the file's defaults, click **Read PDO mapping**: the real mapping is read
    over SDO and used instead.
-4. **Objects...** opens the object dictionary. **Read** shows the value in the device. **Write...** asks for a
-   value, then shows the SDO frames to confirm.
+4. Click the node: its panel shows the PDO objects live and the SDO traffic. Open **Object dictionary** there:
+   **Read** shows the value in the device. **Write...** asks for a value, then shows the SDO frames to confirm.
 5. **Start**, **Stop**, **Pre-op**, **Reset**: NMT commands for the node, after the preview.
 6. Emergencies of known nodes appear in the **EMCY log**, decoded.
 
@@ -1173,7 +1251,8 @@ Channels are numbered from 0 for Claude (channel 0 is CAN1 in the window).
 - the previews: `get_set_node_id_preview`, `get_baud_preview`, `get_sequence_preview`,
   `get_sdo_write_preview`, `get_nmt_preview` (they return frames, they send nothing);
 - `get_decode_config`, `list_dbc_messages`, `get_canopen_state`, `list_object_dictionary`, `read_sdo`,
-  `get_j1939_state`;
+  `get_j1939_state`, and the detail views: `get_pdo_values`, `get_sdo_log` (SDO traffic of a node, from any
+  master), `get_dbc_message_values`, `get_j1939_source`;
 - `list_dashboards`, `get_dashboard`;
 - plugin read tools: `get_heartbeat_nodes` (heartbeat monitor), `get_eds_problems`, `list_eds_objects`,
   `get_eds_pdos` (the PDOs of a file, decoded) and `read_node_vs_eds` (EDS editor), `get_sniffer_changes`
@@ -1185,7 +1264,8 @@ nothing on a node.
 **What stays on approval.** Every other tool has another verb and transmits, records, replays, loads files or
 changes a node: `connect_channel`, `disconnect_channel`, `send_frame`, `add_transmit_entry`,
 `set_transmit_entry`, `stop_all_transmit`, `start_recording`, `stop_recording`, `start_replay`, `stop_replay`,
-`open_recording_view`, `load_dbc_file`, `assign_eds_file`, `set_j1939_decoding`, `load_pdo_mapping_from_device`,
+`open_recording_view`, `load_dbc_file`, `assign_eds_file`, `add_sdo_server`, `remove_sdo_server`,
+`set_j1939_decoding`, `load_pdo_mapping_from_device`,
 `save_dashboard`, `delete_dashboard`, `save_user_recipe`, `create_eds_from_node` (probes a node and saves an
 EDS), `set_sniffer_notch` (changes only the sniffer's view) and `run_node_plan`. Keep these on approval, so Claude
 Code asks you for each call.
@@ -1225,7 +1305,9 @@ Three plugins ship with CANopener:
 - the [Sniffer](#sniffer);
 - a CANopen heartbeat monitor, a small example to start from: the **Heartbeats** tab shows, per node, the NMT
   state, the heartbeat period, when it was last seen, the count and the boot-ups, and Claude gets
-  `get_heartbeat_nodes`.
+  `get_heartbeat_nodes`. A node is marked **lost** when no heartbeat came for 3 periods. Boot-ups are counted
+  but are not heartbeats: a node that only sends boot-ups is marked **boot-up only / no heartbeat** and has no
+  period.
 
 Plugins run with full access to your PC and the bus: install only what you have reviewed. To write one, see
 [Writing plugins](PLUGINS.md).
@@ -1352,7 +1434,8 @@ means another MCP address) and run `claude mcp list`.
 
 **Does CANopener replace PCAN-View?** That is the goal: receive list, transmit list, trace, recording in the
 `.trc` format, statistics, with PEAK and many other adapters. So far only a Kvaser has been tested on a real
-bus, and only receiving, so it is not yet confirmed (see [Adapters](#adapters)).
+bus, receiving and sending by replay; the transmit list and other adapters are not yet confirmed (see
+[Adapters](#adapters)).
 
 **Can it damage a device?** Watching with an adapter in listen-only mode should not disturb the bus (not yet
 confirmed on hardware). Without listen-only, the adapter acknowledges frames like any node. Sending can, like any

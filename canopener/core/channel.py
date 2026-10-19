@@ -403,6 +403,11 @@ class Channel:
                      r.cycle, r.cmin, r.cmax) for k, r in self.rows.items() if r.seq > since_seq]
         return seq, rows
 
+    def rows_where(self, keep: Callable[[int], bool]) -> dict[int, tuple]:
+        """{key: (data, t_last, cycle, count)} of the receive-table rows whose key (id | flags << 29) passes keep."""
+        with self._lock:
+            return {k: (r.data, r.t_last, r.cycle, r.count) for k, r in self.rows.items() if keep(k)}
+
     def clear(self) -> None:
         """Clear the receive table and counters (the trace ring keeps running)."""
         with self._lock:

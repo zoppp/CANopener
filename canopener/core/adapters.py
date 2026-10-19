@@ -99,6 +99,10 @@ class ChannelConfig:
     def from_dict(cls, d: dict) -> "ChannelConfig":
         known = {k: d[k] for k in ("interface", "channel", "bitrate", "fd", "data_bitrate", "listen_only", "extra")
                  if k in d}
+        from .transmit import parse_bool          # (transmit imports channel, which imports this module)
+        for k in ("fd", "listen_only"):
+            if k in known:
+                known[k] = parse_bool(known[k], k)      # "false" must not open in FD or listen-only mode
         cfg = cls(**known)
         if cfg.channel in ("", None):
             cfg.channel = None

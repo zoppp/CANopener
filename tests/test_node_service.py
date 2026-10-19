@@ -202,3 +202,111 @@ def test_preview_shows_fd_padding_and_wait_node_polling():
     assert pv[1]["frames"][0]["id"] == 0x605
     with pytest.raises(sequence.SequenceError):
         sequence.preview([{"op": "sdo_write", "node": 1, "index": "0x2100", "sub": 0, "type": "bytes", "value": ""}], {})
+
+
+def test_set_id_refuses_an_id_already_in_use(svc, channel):
+    """Seen in the UI: 5 -> 10 with node 10 present was only a warning, and its answer 'verified' the move."""
+    a, b = FakeSlave(channel, node_id=5, heartbeat_ms=50), FakeSlave(channel, node_id=10, heartbeat_ms=50)
+    try:
+        svc.scan(0, passive_s=0.3, sdo_timeout=0.01)
+        with pytest.raises(NodeError, match="already in use"):
+            svc.plan_set_id(0, 5, 10)
+        assert svc.plan_set_id(0, 5, 11).token                          # a free id still works
+    finally:
+        a.close(); b.close()
+
+
+def test_a_reconnect_makes_the_scan_stale(svc, engine, channel):
+    """After a reconnect the device at an id may be another one: the old scan must not drive a recipe."""
+    slave = FakeSlave(channel, node_id=5, heartbeat_ms=50)
+    try:
+        svc.scan(0, passive_s=0.3, sdo_timeout=0.01)
+        assert svc.scan_dict(0) is not None
+        engine.connect(ChannelConfig("virtual", channel), index=0)        # reconnect at the same index
+        with pytest.raises(NodeError, match="scan the bus first"):
+            svc.plan_set_id(0, 5, 6)
+        with pytest.raises(NodeError, match="not found in the last scan"):
+            svc.plan_baud(0, 500, node=5)
+        assert svc.scan_dict(0) is None
+    finally:
+        slave.close()
+
+
+def test_a_vendor_wide_recipe_warns_in_the_preview(svc, channel, monkeypatch):
+    """A recipe without a product code is picked for every product of the vendor: the plan must say so."""
+    bundled = recipes_module.load_recipes()
+    wide = dict(bundled["vendors"]["0x0CA0"])
+    wide.pop("product_code")
+    monkeypatch.setattr(svc, "recipes", lambda: {**bundled, "vendors": {"0x0CA0": wide}})
+    slave = FakeSlave(channel, node_id=1, product_code=0x7777, heartbeat_ms=50)
+    try:
+        svc.scan(0, passive_s=0.3, sdo_timeout=0.01)
+        plan = svc.plan_set_id(0, 1, 2)
+        assert any("every product of vendor 0xCA0" in w and "0x7777" in w for w in plan.warnings), plan.warnings
+        assert any("every product" in w for w in svc.plan_baud(0, 500, node=1).warnings)
+        monkeypatch.setattr(svc, "recipes", lambda: bundled)          # the bundled one names its product
+        slave.close()
+        slave = FakeSlave(channel, node_id=1, heartbeat_ms=50)
+        svc.scan(0, passive_s=0.3, sdo_timeout=0.01)
+        assert not any("every product" in w for w in svc.plan_set_id(0, 1, 2).warnings)
+    finally:
+        slave.close()
+
+
+def test_a_user_recipe_does_not_inherit_the_bundled_product_code(svc):
+    """Review: a saved recipe kept the bundled model's product code, so it replaced that model's recipe only."""
+    steps = [{"op": "sdo_write", "node": "$OLD_ID", "index": "0x2110", "sub": 1, "type": "u8", "value": "$NEW_ID"}]
+    svc.save_recipe(0x0CA0, "my-other-model", "set_id", steps)
+    rec = recipes_module.resolve_recipe(recipes_module.load_recipes(), 0x0CA0, product_code=0x7777)
+    assert rec["name"] == "my-other-model" and recipes_module.vendor_wide(rec)    # every product, with a warning
+
+
+def test_sdo_bit_rate_change_first_checks_the_device_identity(svc, channel):
+    """Review: Set ID read 0x1018 before writing, the SDO bit-rate change did not (another machine since the scan)."""
+    slave = FakeSlave(channel, node_id=1, heartbeat_ms=50)              # demo device A: an SDO bit-rate recipe
+    try:
+        svc.scan(0, passive_s=0.3, sdo_timeout=0.01)
+        plan = svc.plan_baud(0, 500, node=1)
+        first = plan.steps[0]
+        assert first["op"] == "sdo_read" and first["index"] == "0x1018" and first["node"] == "$OLD_ID"
+        assert "expect" in first
+    finally:
+        slave.close()
+
+
+def test_a_stopped_or_failed_run_says_what_was_already_sent(svc, channel):
+    slave = FakeSlave(channel, node_id=9, heartbeat_ms=0)
+    try:
+        steps = [{"op": "sdo_write", "node": 9, "index": "0x2110", "sub": 1, "type": "u8", "value": 5},
+                 {"op": "sdo_read", "node": 40, "index": "0x1000", "sub": 0}]       # nobody there: fails
+        plan = svc.plan_custom(0, steps, {})
+        with pytest.raises(NodeError, match="Already sent before that: .*0x2110"):
+            svc.run_now(plan.token)
+    finally:
+        slave.close()
+
+
+def test_a_custom_run_that_writes_makes_the_scan_stale(svc, channel):
+    """Review: custom mode can move a node; the 'id already in use' check must not use the old scan."""
+    slave = FakeSlave(channel, node_id=9, heartbeat_ms=50)
+    try:
+        svc.scan(0, passive_s=0.3, sdo_timeout=0.01)
+        read = svc.plan_custom(0, [{"op": "sdo_read", "node": 9, "index": "0x1000", "sub": 0}], {})
+        svc.run_now(read.token)
+        assert svc.scan_dict(0) is not None                              # a read changes nothing
+        write = svc.plan_custom(0, [{"op": "sdo_write", "node": 9, "index": "0x2110", "sub": 1, "type": "u8",
+                                     "value": 5}], {})
+        svc.run_now(write.token)
+        assert svc.scan_dict(0) is None
+    finally:
+        slave.close()
+
+
+def test_a_recipe_forced_by_name_warns_when_the_product_differs(svc, channel):
+    slave = FakeSlave(channel, node_id=1, product_code=0x7777, heartbeat_ms=50)
+    try:
+        svc.scan(0, passive_s=0.3, sdo_timeout=0.01)
+        plan = svc.plan_set_id(0, 1, 2, method="sdo:sim-demo-a")
+        assert any("is for product" in w and "0x7777" in w for w in plan.warnings), plan.warnings
+    finally:
+        slave.close()

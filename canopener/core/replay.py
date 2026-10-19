@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import threading
 import time
 from pathlib import Path
@@ -12,6 +13,8 @@ from .channel import F_ERR, F_TX, frame_to_message
 from .recorder import read_frames
 
 log = logging.getLogger(__name__)
+MIN_LOOP_SPAN_S = 0.010          # a shorter file looped would be sent back to back (bus flood)
+MAX_SPEED = 100.0                # the UI offers 0.5x..10x; API, MCP and CLI: finite and at most this
 
 
 class Player:
@@ -25,8 +28,8 @@ class Player:
         self.path = Path(path)
         if not self.path.is_file():
             raise FileNotFoundError(f"{self.path} not found")
-        if speed <= 0:
-            raise ValueError("speed must be > 0")
+        if not (isinstance(speed, (int, float)) and math.isfinite(speed) and 0 < speed <= MAX_SPEED):
+            raise ValueError(f"speed must be a number above 0 and at most {MAX_SPEED:g}")
         self._send = send
         self.bus_map = dict(bus_map)
         self.speed = speed
@@ -58,12 +61,23 @@ class Player:
             log.exception("replay: cannot read %s", self.path)
             return
         self.total = len(frames)
+        if not frames:
+            self.state = "done"
+            return
+        t_file0 = frames[0][1][0]
+        span = frames[-1][1][0] - t_file0
+        if self.loop and span / self.speed < MIN_LOOP_SPAN_S:     # what one pass takes at this speed
+            self.state = "error"
+            self.last_error = (f"the file spans {span * 1000:.1f} ms ({span / self.speed * 1000:.1f} ms at "
+                               f"{self.speed:g}x): looping it would send its frames back to back "
+                               f"(minimum {MIN_LOOP_SPAN_S * 1000:.0f} ms); use the transmit list for a cyclic frame")
+            return
+        # a pass ends one typical frame gap after its last frame, as if the recording went on
+        gaps = sorted(b[1][0] - a[1][0] for a, b in zip(frames, frames[1:]) if b[1][0] > a[1][0])
+        gap = max(gaps[len(gaps) // 2], 0.001) if gaps else 0.001
+        t_wall0 = time.perf_counter()
+        paused_for = 0.0
         while not self._stop.is_set():
-            if not frames:
-                break
-            t_file0 = frames[0][1][0]
-            t_wall0 = time.perf_counter()
-            paused_for = 0.0
             for bus, fr in frames:
                 if self._stop.is_set():
                     break
@@ -84,6 +98,8 @@ class Player:
                 delay = due - time.perf_counter()
                 if delay > 0:
                     self._stop.wait(delay) if delay > 0.002 else time.sleep(delay)
+                if self._stop.is_set():                 # stopped during the wait: never send this frame early
+                    break
                 self.position_s = ts - t_file0
                 try:
                     self._send(ch, frame_to_message(can_id, flags & ~F_TX, data, dlc))
@@ -96,6 +112,8 @@ class Player:
             if not self.loop:
                 break
             self.loops += 1
+            # the next pass starts one gap after this one's end, never sooner (no catch-up burst after a slow pass)
+            t_wall0 = max(t_wall0 + (span + gap) / self.speed, time.perf_counter() - paused_for + gap / self.speed)
         if self.state != "error":
             self.state = "stopped" if self._stop.is_set() else "done"
 

@@ -93,11 +93,13 @@ def test_set_raises_on_unconfirmed_conflict(channel, network):
         scan_result = scan_mod.scan(network, passive_seconds=0.4, sdo_timeout=SDO_TIMEOUT)
         recipes = recipes_module.load_recipes()
 
-        try:
-            setid.set_node_id(network, scan_result, old_id=30, new_id=31, recipes=recipes)
-            assert False, "expected a ConflictError"
-        except setid.ConflictError as exc:
-            assert 31 in exc.conflict.conflicting_nodes
+        for confirm in (False, True):          # a node already at the new id is refused even when confirmed
+            try:
+                setid.set_node_id(network, scan_result, old_id=30, new_id=31, recipes=recipes,
+                                  confirm_conflict=confirm)
+                assert False, "expected a ConflictError"
+            except setid.ConflictError as exc:
+                assert 31 in exc.conflict.conflicting_nodes
     finally:
         slave_a.close()
         slave_b.close()
@@ -125,3 +127,35 @@ def test_node_id_range_is_enforced(channel, network):
         assert slave.writes == []
     finally:
         slave.close()
+
+
+def test_set_stops_before_writing_when_another_device_sits_at_the_old_id(channel, network):
+    """The scan saw device A at node 1; since then a different device (another serial) is there. The recipe must
+    not be written into it: the identity check at the start fails before the first write."""
+    a = FakeSlave(channel, node_id=1, serial=0x42, heartbeat_ms=100)
+    try:
+        scan_result = scan_mod.scan(network, passive_seconds=0.4, sdo_timeout=SDO_TIMEOUT)
+    finally:
+        a.close()
+    b = FakeSlave(channel, node_id=1, serial=0x77, heartbeat_ms=100)          # swapped module, same model
+    try:
+        try:
+            setid.set_node_id(network, scan_result, old_id=1, new_id=72, recipes=recipes_module.load_recipes(),
+                              verify_timeout=0.2)
+            assert False, "expected a SetIdError"
+        except setid.SetIdError as exc:
+            assert "expected" in str(exc)
+        assert b.writes == []
+    finally:
+        b.close()
+
+
+def test_set_plan_reads_the_identity_first_and_verifies_the_same_device():
+    info = scan_mod.NodeInfo(node_id=1, vendor_id=0x0CA0, product_code=0x53494D01, serial_number=0x42)
+    scan_result = scan_mod.ScanResult(nodes={1: info}, raw_ids=set(), raw_ext_ids=set(), pdo_only_ids=set(), duration_s=0.0)
+    plan = setid.plan_set_id(scan_result, 1, 2, recipes_module.load_recipes())
+    ops = [(s["op"], s.get("sub")) for s in plan.steps]
+    assert ops[:3] == [("sdo_read", 1), ("sdo_read", 2), ("sdo_read", 4)]
+    assert all(s["op"] != "sdo_write" for s in plan.steps[:3])
+    wait = [s for s in plan.steps if s["op"] == "wait_node"][0]
+    assert (wait["vendor"], wait["product"], wait["serial"]) == ("$VENDOR", "$PRODUCT", "$SERIAL")

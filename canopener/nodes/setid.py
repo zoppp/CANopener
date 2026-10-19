@@ -52,7 +52,7 @@ class ConflictError(SetIdError):
         if ids:
             parts.append(f"COB-ID(s) already on the bus: {ids}")
         if nodes:
-            parts.append(f"node id already in use by: {nodes}")
+            parts.append(f"node id already in use by: {nodes} (pick a free id)")
         super().__init__(f"node id {conflict.new_id} conflicts - " + "; ".join(parts))
 
 
@@ -96,6 +96,28 @@ def _check_node_id_range(recipe: dict, old_id: int, new_id: int) -> None:
         )
 
 
+def _with_identity_checks(steps: list, recipe: dict, info) -> list:
+    """Tie the run to the scanned device. SDO/sequence recipes first read 0x1018 at the old id and stop on a
+    different device (a module swapped or another machine since the scan); LSS already selects by identity. The
+    check on the new id must find that same device, not whatever else answers there."""
+    if info is None or not info.vendor_id:
+        return steps
+    ident = {"vendor": "$VENDOR"}
+    if info.product_code is not None:
+        ident["product"] = "$PRODUCT"
+    if info.serial_number:
+        ident["serial"] = "$SERIAL"
+    out = []
+    if recipe.get("method") in ("sdo", "sequence"):
+        out = [{"op": "sdo_read", "node": "$OLD_ID", "index": "0x1018", "sub": sequence.IDENTITY_SUBS[k],
+                "type": "u32", "expect": v, "note": "still the scanned device"} for k, v in ident.items()]
+    for s in steps:
+        if s.get("op") == "wait_node" and s.get("node") == "$NEW_ID":
+            s = {**s, **ident}
+        out.append(s)
+    return out
+
+
 @dataclass
 class SetPlan:
     old_id: int
@@ -128,6 +150,10 @@ def plan_set_id(
         raise SetIdError("the old and new node id are the same")
 
     conflict = check_conflict(scan_result, old_id, new_id)
+    if conflict.conflicting_nodes:
+        # never overridable: two nodes on one id answer each other's SDO requests and collide on every PDO and
+        # heartbeat (only free-form traffic on the new id's COB-IDs is a warning the user may accept)
+        raise ConflictError(ConflictReport(new_id, conflicting_nodes=conflict.conflicting_nodes))
     info = scan_result.nodes.get(old_id) if scan_result else None
     vendor_id = info.vendor_id if info else None
     try:
@@ -155,6 +181,7 @@ def plan_set_id(
         steps, effect = recipes_module.set_id_steps(recipe, verify_timeout)
     except ValueError as exc:
         raise SetIdError(str(exc)) from exc
+    steps = _with_identity_checks(steps, recipe, info)
     vars = {"OLD_ID": old_id, "NEW_ID": new_id, "NODE": old_id, **recipes_module.identity_vars(info)}
     try:
         sequence.preview(steps, vars)

@@ -8,6 +8,12 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 $out = if ($OutDir) { $OutDir } else { Join-Path (Split-Path -Parent $root) "canopener-release" }   # next to the repository
 $py = if ($Python) { $Python } else { Join-Path $root ".venv\Scripts\python.exe" }   # CI passes -Python python
+# The window needs pywebview + pythonnet; without them PyInstaller only warns and the exe falls back to the browser.
+$ErrorActionPreference = "Continue"   # PowerShell 5.1 turns the import error on stderr into its own error
+& $py -c "import webview, clr" 2>$null
+$depsOk = $LASTEXITCODE -eq 0
+$ErrorActionPreference = "Stop"
+if (-not $depsOk) { throw "pywebview/pythonnet missing from $py (pip install -e `".[app,gs_usb,decode,dev]`")" }
 $version = (& $py -c "import sys;sys.path.insert(0,r'$root');import canopener;print(canopener.__version__)").Trim()   # YYYY.MM.DD.HHMM
 
 # Which build this is (About box): version, commit, uncommitted changes, build time.

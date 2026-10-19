@@ -177,3 +177,13 @@ def test_change_bitrate_sdo_power_cycle_writes_value_then_store_and_returns_none
         ]
     finally:
         slave.close()
+
+
+def test_sdo_bit_rate_change_cannot_be_stopped_after_the_reset():
+    """A stop after the NMT reset left the node at the new rate and the adapter at the old one (as LSS does)."""
+    from canopener.nodes import recipes as recipes_module
+    spec = {"index": "0x2101", "sub": 0, "type": "u8", "values": {"250": 3, "500": 2}, "effect": "nmt_reset"}
+    steps, _ = recipes_module.baud_sdo_steps(spec, 500)
+    reset = next(i for i, s in enumerate(steps) if s["op"] == "nmt")
+    after = [s for s in steps[reset + 1:] if s["op"] in ("delay", "reopen")]
+    assert after and all(s.get("nostop") for s in after)

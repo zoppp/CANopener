@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import itertools
 import logging
+import math
 import sys
 import threading
 import time
@@ -17,6 +18,7 @@ from .channel import F_BRS, F_EXT, F_FD, F_RTR
 log = logging.getLogger(__name__)
 
 FD_LENGTHS = (0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 20, 24, 32, 48, 64)
+MIN_PERIOD_MS = 1.0             # a shorter cycle runs back to back: a bus flood, never what was meant
 _ids = itertools.count(1)
 
 
@@ -25,7 +27,9 @@ def parse_data(text) -> bytes:
     if isinstance(text, (bytes, bytearray)):
         return bytes(text)
     if isinstance(text, (list, tuple)):
-        return bytes(int(b) & 0xFF for b in text)
+        if not all(isinstance(b, int) and not isinstance(b, bool) and 0 <= b <= 0xFF for b in text):
+            raise ValueError(f"data bytes must be whole numbers 0..255: {list(text)!r}")
+        return bytes(text)
     s = str(text or "").replace(",", " ").replace("0x", "").replace("0X", "").strip()
     if not s:
         return b""
@@ -41,7 +45,40 @@ def parse_data(text) -> bytes:
         raise ValueError(f"not hex bytes: {text!r}") from None
 
 
+_TRUE, _FALSE = {"true", "1", "yes", "on"}, {"false", "0", "no", "off", ""}
+
+
+def parse_bool(value, name: str = "value") -> bool:
+    """true/false, 1/0 or their text forms; anything else is an error (bool("false") would be True)."""
+    if value is None or isinstance(value, bool):
+        return bool(value)
+    if isinstance(value, (int, float)) and value in (0, 1):
+        return bool(value)
+    if isinstance(value, str):
+        s = value.strip().lower()
+        if s in _TRUE:
+            return True
+        if s in _FALSE:
+            return False
+    raise ValueError(f"{name}: {value!r} is not true or false")
+
+
+def parse_number(value, kind: type, name: str):
+    """An int or float from the API: true/false and (for an int) fractions are refused, not read as 1 or cut."""
+    if isinstance(value, bool):
+        raise ValueError(f"{name}: {value!r} is not a number")
+    try:
+        n = float(value) if kind is float else (int(value) if isinstance(value, str) else value)
+    except (TypeError, ValueError):
+        raise ValueError(f"{name}: {value!r} is not a number") from None
+    if kind is int and not (isinstance(n, int) or (isinstance(n, float) and n.is_integer())):
+        raise ValueError(f"{name}: {value!r} is not a whole number")
+    return kind(n)
+
+
 def parse_id(text) -> int:
+    if isinstance(text, bool):
+        raise ValueError(f"id: {text!r} is not a CAN id")
     if isinstance(text, int):
         return text
     s = str(text).strip().lower()
@@ -69,8 +106,10 @@ def build_message(can_id: int, data: bytes = b"", *, ext: Optional[bool] = None,
     elif len(data) > 8:
         raise ValueError("classic CAN carries at most 8 data bytes (tick FD for more)")
     if rtr:
-        return can.Message(arbitration_id=can_id, is_extended_id=ext, is_remote_frame=True,
-                           dlc=dlc if dlc is not None else 0)
+        dlc = 0 if dlc is None else parse_number(dlc, int, "dlc")
+        if not 0 <= dlc <= 8:
+            raise ValueError(f"a remote frame's DLC is 0..8, not {dlc}")
+        return can.Message(arbitration_id=can_id, is_extended_id=ext, is_remote_frame=True, dlc=dlc)
     return can.Message(arbitration_id=can_id, is_extended_id=ext, is_fd=fd, bitrate_switch=fd and brs,
                        data=data)
 
@@ -112,8 +151,12 @@ class TxEntry:
     def from_dict(cls, d: dict) -> "TxEntry":
         e = cls(can_id=parse_id(d.get("can_id", 0)))
         for k in ("data", "ext", "fd", "brs", "rtr", "dlc", "period_ms", "enabled", "channel", "comment"):
-            if k in d:
-                setattr(e, k, type(getattr(e, k))(d[k]) if d[k] is not None else getattr(e, k))
+            if k in d and d[k] is not None:
+                cur = getattr(e, k)
+                setattr(e, k, parse_bool(d[k], k) if isinstance(cur, bool) else
+                        parse_number(d[k], type(cur), k) if isinstance(cur, (int, float)) else type(cur)(d[k]))
+        if not math.isfinite(e.period_ms) or e.period_ms < 0 or 0 < e.period_ms < MIN_PERIOD_MS:
+            raise ValueError(f"cycle time {e.period_ms:g} ms: use 0 (send on click) or at least {MIN_PERIOD_MS:g} ms")
         e.data = str(d.get("data", "") or "")
         e.dbc_message = str(d.get("dbc_message") or "")
         e.signals = dict(d.get("signals") or {})
@@ -138,6 +181,7 @@ class TxScheduler:
         self.encoder: Optional[Callable[[TxEntry], None]] = None   # DBC entries (set by the decode manager)
         self.entries: list[TxEntry] = []
         self._cv = threading.Condition()
+        self._sending = threading.Lock()   # held across "still enabled?" + send: stopping waits for an in-flight send
         self._stop = False
         self._thread: Optional[threading.Thread] = None
 
@@ -191,12 +235,19 @@ class TxScheduler:
             e.error = ""
             e.next_due = 0.0
             self._cv.notify_all()
-            return e
+        self._settle()
+        return e
 
     def remove(self, entry_id: int) -> None:
         with self._cv:
             self.entries = [e for e in self.entries if e.id != entry_id]
             self._cv.notify_all()
+        self._settle()
+
+    def _settle(self) -> None:
+        """Wait for a cyclic send already under way: after a stop, disable or remove returns, nothing more goes out."""
+        with self._sending:
+            pass
 
     def replace_all(self, entries: list[TxEntry]) -> None:
         with self._cv:
@@ -210,6 +261,7 @@ class TxScheduler:
             for e in self.entries:
                 e.enabled = False
             self._cv.notify_all()
+        self._settle()
 
     def send_once(self, entry_id: int) -> float:
         e = self.get(entry_id)
@@ -236,22 +288,33 @@ class TxScheduler:
                     if e.next_due == 0.0:
                         e.next_due = now
                     if e.next_due <= now:
-                        due.append(e)
+                        # the frame is built here, under the lock update() holds while it changes the fields:
+                        # never some new and some old fields (a frame nobody defined)
+                        try:
+                            due.append((e, e.channel, e.message()))
+                        except Exception as exc:
+                            due.append((e, e.channel, exc))
                     else:
                         wait = min(wait, e.next_due - now)
                 if not due:
                     self._cv.wait(wait)
                     continue
-            for e in due:
+            for e, chan, msg in due:
                 period = e.period_ms / 1000.0
-                try:
-                    self._send(e.channel, e.message())
-                    e.count += 1
-                    e.error = ""
-                except Exception as exc:
-                    e.error = str(exc)
-                    if "not connected" in e.error or "listen-only" in e.error:
-                        e.enabled = False                 # nothing to send on: stop instead of spinning
+                with self._sending:
+                    # stopped, disabled or removed while an earlier entry of this batch was being sent
+                    if not e.enabled or not any(x is e for x in self.entries):
+                        continue
+                    try:
+                        if isinstance(msg, Exception):
+                            raise msg
+                        self._send(chan, msg)
+                        e.count += 1
+                        e.error = ""
+                    except Exception as exc:
+                        e.error = str(exc)
+                        if "not connected" in e.error or "listen-only" in e.error:
+                            e.enabled = False             # nothing to send on: stop instead of spinning
                 e.next_due += period
                 if e.next_due < time.perf_counter() - period:   # fell behind (e.g. adapter busy): resync
                     e.next_due = time.perf_counter() + period

@@ -116,10 +116,27 @@ def test_mcp_decode_tools(client):
     r, tools = _mcp(client, "tools/list", session=session, id_=2)
     names = {t["name"] for t in tools["result"]["tools"]}
     assert {"list_dbc_messages", "get_j1939_state", "get_canopen_state", "read_sdo", "get_sdo_write_preview",
-            "get_nmt_preview", "load_dbc_file", "assign_eds_file"} <= names
+            "get_nmt_preview", "load_dbc_file", "assign_eds_file", "add_sdo_server", "remove_sdo_server"} <= names
     r, res = _mcp(client, "tools/call", {"name": "load_dbc_file", "arguments": {"path": str(DATA / "test.dbc")}},
                   session=session, id_=3)
     assert json.loads(res["result"]["content"][0]["text"])["messages"] == 4
     r, res = _mcp(client, "tools/call", {"name": "get_nmt_preview", "arguments": {"node": 5, "command": "start"}},
                   session=session, id_=4)
     assert "token" in json.dumps(res) and "01 05" in json.dumps(res)
+    r, res = _mcp(client, "tools/call", {"name": "add_sdo_server", "arguments": {
+        "node": 7, "request_cob_id": "0x627", "response_cob_id": "0x5A7"}}, session=session, id_=5)
+    assert json.loads(res["result"]["content"][0]["text"])["response"] == 0x5A7
+    r, res = _mcp(client, "tools/call", {"name": "remove_sdo_server",
+                                         "arguments": {"node": 7, "request_cob_id": "627"}}, session=session, id_=6)
+    assert client.svc.decode.config()["sdo_servers"] == []
+
+
+def test_sdo_server_rest(client):
+    r = client.post("/api/decode/canopen/sdo_server", json={"node": 7, "request": "627", "response": "5A7"})
+    assert r.status_code == 200 and r.json() == {"node": 7, "request": 0x627, "response": 0x5A7, "channel": None}
+    r = client.post("/api/decode/canopen/sdo_server", json={"node": 8, "request": "628", "response": "5A7"})
+    assert r.status_code == 400 and "overlaps" in r.text
+    assert client.get("/api/decode/canopen").json()["sdo_servers"][0]["node"] == 7
+    r = client.post("/api/decode/canopen/sdo_server/remove", json={"node": 7, "request": 0x627})
+    assert r.json() == {"ok": True}
+    assert client.get("/api/decode").json()["sdo_servers"] == []

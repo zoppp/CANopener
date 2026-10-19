@@ -4,7 +4,9 @@ An open-source CAN engineering toolbox, built to replace PCAN-View with many ada
 commissioning, plugins and an MCP endpoint for Claude.
 
 **Status:** everything below is tested on CANopener's virtual bus and simulator. On real hardware, only a Kvaser
-adapter has been tested so far: receiving on a live 250 kbit/s machine bus. The
+adapter has been tested so far: receiving, and sending by replay, on a live 250 kbit/s machine bus. Watching that
+bus, it also decoded heartbeats (NMT state and period), PDOs with an EDS file, and the SDO log of another master's
+reads; the values matched the machine's known periods and a decode by hand. The
 [adapter table](docs/user-guide.md#adapters) shows what has been confirmed. Reports from your own hardware are
 welcome.
 
@@ -23,7 +25,8 @@ the virtual bus and simulator; for real hardware, see the status above.
   unknown devices (SDO steps, raw frames, raw LSS). Every change is previewed as exact frames and confirmed first,
   and logged.
 - **Decoding**: DBC (decode, and transmit by signal value), CANopen EDS/DCF/XDD (PDOs, SDO browser, NMT, EMCY,
-  heartbeats), J1939 (PGN/SA, address claim, transport protocol, DM1); a Decoded column in the receive list.
+  heartbeats; per node its PDO objects live and the SDO traffic on the bus), J1939 (PGN/SA, address claim,
+  transport protocol, DM1); a Decoded column in the receive list.
 - **EDS editor**: create (CiA 301/401/402 templates), open, check and save EDS/DCF files; a PDO editor (COB-ID
   flags, transmission types, the frame layout of each mapping, entries decoded and encoded); compare a file with a
   node, read a node's values into a DCF, build an EDS from a node that came without one, write a DCF through the
@@ -32,7 +35,7 @@ the virtual bus and simulator; for real hardware, see the status above.
   defined on raw frames without a DBC.
 - **Adapters**: backends for PEAK PCAN, Kvaser, CANable (slcan and candleLight/gs_usb, libusb bundled), Vector,
   IXXAT, SocketCAN and virtual, with CAN FD settings where the backend has them; several channels at once. Only
-  Kvaser tested on hardware so far (receiving at 250 kbit/s). ESP32 (GVRET), WiFi slcan
+  Kvaser tested on hardware so far (receiving, and sending by replay, at 250 kbit/s). ESP32 (GVRET), WiFi slcan
   and ELM327/OBDLink support is planned but untested: [help wanted](docs/user-guide.md#more-adapters-help-wanted).
 - **Plugins**: tabs, REST routes, MCP tools and live frame consumers ([docs/PLUGINS.md](docs/PLUGINS.md)).
 - **Claude**: MCP at `http://127.0.0.1:8775/mcp/`; read tools (and scans, which send only SDO read requests, plus an SDO abort to node ids that do not answer) can be allowlisted in Claude Code; keep changes to nodes and your own frames on approval there.

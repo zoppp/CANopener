@@ -71,14 +71,18 @@ SHOTS = [
           const i = document.querySelector(`[data-var="${k}"]`); i.value = v;
           i.dispatchEvent(new Event('input', {bubbles: true})); }
         document.querySelector('#cs').scrollIntoView();""", 2),
-    ("decode-dbc", "CO.show('decode'); await sleep(300); document.querySelector('[data-sub=dbc]').click();", 3),
+    ("decode-dbc", """CO.show('decode'); await sleep(300); document.querySelector('[data-sub=dbc]').click();
+        await sleep(1500); document.querySelector('#dec-body tr[data-msg="Engine"] td').click();""", 2),
     ("decode-canopen", """CO.show('decode'); await sleep(300); document.querySelector('[data-sub=canopen]').click();
         await sleep(1500);
-        document.querySelector('#dec-body tr[data-node="5"] [data-act=od]').click(); await sleep(1000);
+        document.querySelector('#dec-body tr[data-node="5"] td').click(); await sleep(1500);
+        document.querySelector('#np-od').open = true;
         for (const k of ['4096:0', '4120:1', '4120:2', '4104:0']) {
           document.querySelector(`#od-rows tr[data-k="${k}"] [data-sdo=read]`).click(); await sleep(700); }
-        const q = document.querySelector('#od-filter'); q.value = '0x10'; q.dispatchEvent(new Event('input'));""", 2),
-    ("decode-j1939", "CO.show('decode'); await sleep(300); document.querySelector('[data-sub=j1939]').click();", 3),
+        const q = document.querySelector('#od-filter'); q.value = '0x10'; q.dispatchEvent(new Event('input'));
+        await sleep(300); document.querySelector('#node-panel').scrollIntoView();""", 2),
+    ("decode-j1939", """CO.show('decode'); await sleep(300); document.querySelector('[data-sub=j1939]').click();
+        await sleep(1500); document.querySelector('#dec-body tr[data-sa] td').click();""", 2),
     ("dashboards", "CO.show('dash')", 6),
     ("dash-edit", "CO.show('dash'); await sleep(1500); document.querySelector('#db-edit').click();", 4),
     ("dash-widget", """CO.show('dash'); await sleep(1500); document.querySelector('#db-edit').click(); await sleep(800);

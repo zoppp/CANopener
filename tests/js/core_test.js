@@ -67,4 +67,17 @@ const wrong = parse("100 8 11 22\ndead beef\nadd 12");
 assert.deepStrictEqual(wrong.frames, []);
 assert.strictEqual(wrong.bad.length, 3);
 
+// the transmit list shows the bytes the server sends (core/transmit.py parse_data), not its own reading of the text
+const dh = CO.dataHex;
+assert.strictEqual(dh("11 22 33"), "112233");
+assert.strictEqual(dh("112233"), "112233");
+assert.strictEqual(dh("0x11 0x22"), "1122");            // was shown as 01 10 22
+assert.strictEqual(dh("1 2 3"), "010203");              // was shown as 12 3
+assert.strictEqual(dh("0x0A,0x0B"), "0A0B");            // was shown as 00 A0 0B
+assert.strictEqual(dh("a"), "0A");
+assert.strictEqual(dh(""), "");
+assert.strictEqual(dh("123"), null);                    // odd packed hex: the server refuses it
+assert.strictEqual(dh("1FF 00"), null);                 // not a byte
+assert.strictEqual(dh("GG"), null);
+
 console.log("core.js helpers: ok");

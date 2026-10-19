@@ -39,7 +39,7 @@
       const running = p.state === "playing" || p.state === "paused";
       ps.innerHTML = `<div class="notice ${p.state === "error" ? "bad" : running ? "good" : ""}"><b>Replay ${CO.esc(p.state)}</b> ${CO.esc(p.path.split(/[\\/]/).pop())}:
         ${p.sent.toLocaleString()} of ${p.total.toLocaleString()} sent, ${p.position_s.toFixed(1)} s${p.loops ? `, loop ${p.loops}` : ""}
-        ${p.errors ? `<br>${p.errors} send errors: ${CO.esc(p.last_error)}` : ""}</div>
+        ${p.errors ? `<br>${p.errors} send errors: ${CO.esc(p.last_error)}` : p.state === "error" ? `<br>${CO.esc(p.last_error)}` : ""}</div>
         ${running ? `<div class="row"><button class="btn" data-rp="pause">${p.state === "paused" ? "Resume" : "Pause"}</button><button class="btn danger" data-rp="stop">Stop</button></div>` : ""}`;
     } else ps.innerHTML = "";
   }

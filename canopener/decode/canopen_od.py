@@ -1,4 +1,5 @@
-"""CANopen decoding: an EDS/XDD per node (PDO decode, the object dictionary for the SDO browser), EMCY and heartbeats.
+"""CANopen decoding: an EDS/XDD per node (PDO decode, the object dictionary for the SDO browser), SDO traffic
+(canopen_sdo), EMCY and heartbeats.
 
 PDOs are decoded from the mapping in the EDS (default values) or from the mapping read from the device over SDO.
 Like the J1939 decoder this runs on the decode thread under the manager's lock.
@@ -15,6 +16,8 @@ from typing import Optional
 
 import canopen
 from canopen.objectdictionary import ODArray, ODRecord, ODVariable, datatypes as dt
+
+from .canopen_sdo import SdoSniffer, cia301_name
 
 NMT_STATES = {0: "boot-up", 4: "stopped", 5: "operational", 127: "pre-operational"}
 NMT_COMMANDS = ("start", "stop", "preop", "reset_node", "reset_comm")
@@ -163,28 +166,49 @@ class Pdo:
             var = od.get_variable(index, sub) if index > 0x0FFF else None     # below 0x1000: dummy mapping
             if index > 0x0FFF:
                 name_ = var.qualname if var is not None else f"0x{index:04X}:{sub:02X}"
-                self.entries.append((name_, var, offset, bits))
+                self.entries.append((name_, var, offset, bits, index, sub))
                 if var is not None:
                     self.meta[name_] = (var.unit or "", var.min, var.max, dict(var.value_descriptions))
             offset += bits
+
+    @staticmethod
+    def _value(var, v: int, bits: int):
+        if var is not None and bits % 8 == 0:
+            return value_of(var, v.to_bytes(bits // 8, "little"))
+        return bool(v) if bits == 1 else v
 
     def decode(self, data: bytes) -> list[tuple[str, object]]:
         raw = int.from_bytes(data, "little")
         nbits = len(data) * 8
         out = []
-        for name, var, off, bits in self.entries:
+        for name, var, off, bits, _, _ in self.entries:
             if off + bits > nbits:
                 continue
-            v = (raw >> off) & ((1 << bits) - 1)
-            if var is not None and bits % 8 == 0:
-                out.append((name, value_of(var, v.to_bytes(bits // 8, "little"))))
-            else:
-                out.append((name, bool(v) if bits == 1 else v))
+            out.append((name, self._value(var, (raw >> off) & ((1 << bits) - 1), bits)))
+        return out
+
+    def fields(self, data: Optional[bytes]) -> list[dict]:
+        """Every mapped object with its place in the frame and, given the frame data, its raw and decoded value."""
+        raw = int.from_bytes(data, "little") if data is not None else 0
+        nbits = len(data) * 8 if data is not None else 0
+        out = []
+        for name, var, off, bits, index, sub in self.entries:
+            f = {"name": name, "index": index, "sub": sub, "offset": off, "bits": bits, "raw": None, "value": None,
+                 "text": "", "unit": "", "min": None, "max": None}
+            if var is not None:
+                f.update(unit=var.unit or "", min=var.min, max=var.max)
+            if off + bits <= nbits:
+                v = (raw >> off) & ((1 << bits) - 1)
+                f["raw"] = f"0x{v:0{max(1, (bits + 3) // 4)}X}"
+                f["value"] = self._value(var, v, bits)
+                if var is not None and var.value_descriptions and isinstance(f["value"], int):
+                    f["text"] = var.value_descriptions.get(f["value"], "")
+            out.append(f)
         return out
 
     def info(self) -> dict:
         return {"name": self.name, "cob_id": self.cob_id,
-                "entries": [{"name": n, "offset": o, "bits": b} for n, _, o, b in self.entries]}
+                "entries": [{"name": e[0], "offset": e[2], "bits": e[3]} for e in self.entries]}
 
 
 def _default(od, index: int, sub: int) -> Optional[int]:
@@ -263,6 +287,9 @@ class CanopenDecoder:
         self.by_cob: dict[int, list[Pdo]] = {}
         self.nmt: dict[tuple[int, int], dict] = {}                    # (channel, node) -> state from heartbeats
         self.emcy: collections.deque = collections.deque(maxlen=500)
+        self.sdo = SdoSniffer(self._describe)
+        self.sdo_servers: list[dict] = []        # extra SDO servers set by the user: node, request, response, channel
+        self.sdo_by_cob: dict[int, list[tuple]] = {}                  # COB-ID -> [(channel, node, request?, label)]
 
     def assign(self, node: int, path: str, channel: Optional[int]) -> NodeEds:
         if not 1 <= node <= 127:
@@ -287,20 +314,93 @@ class CanopenDecoder:
                 by_cob.setdefault(p.cob_id, []).append(p)
         self.by_cob = by_cob
 
+    def add_sdo_server(self, node: int, request: int, response: int, channel: Optional[int]) -> dict:
+        """Follow SDO transfers on another COB-ID pair of a node (a second SDO server, 0x1201...), logged under it."""
+        if not 1 <= node <= 127:
+            raise ValueError("node id must be 1..127")
+        for cob in (request, response):
+            if not 0 < cob <= 0x7FF:
+                raise ValueError(f"COB-ID 0x{cob:X} is not an 11-bit id (1..7FF)")
+        if request == response:
+            raise ValueError("the request and response COB-IDs must differ")
+        if (request, response) == (0x600 + node, 0x580 + node):
+            raise ValueError(f"0x{request:03X}/0x{response:03X} is the default SDO server of node {node}")
+        for s in self.sdo_servers:
+            if {request, response} & {s["request"], s["response"]} and \
+                    (channel is None or s["channel"] is None or channel == s["channel"]):
+                raise ValueError(f"0x{request:03X}/0x{response:03X} overlaps the SDO server "
+                                 f"0x{s['request']:03X}/0x{s['response']:03X} of node {s['node']}")
+        s = {"node": node, "request": request, "response": response, "channel": channel}
+        self.sdo_servers.append(s)
+        self._index_sdo()
+        return s
+
+    def remove_sdo_server(self, node: int, request: int, channel: Optional[int]) -> None:
+        self.sdo_servers = [s for s in self.sdo_servers
+                            if (s["node"], s["request"], s["channel"]) != (node, request, channel)]
+        self._index_sdo()
+
+    def _index_sdo(self) -> None:
+        by_cob: dict[int, list] = {}
+        for s in self.sdo_servers:
+            label = f"0x{s['request']:03X}/0x{s['response']:03X}"
+            by_cob.setdefault(s["request"], []).append((s["channel"], s["node"], True, label))
+            by_cob.setdefault(s["response"], []).append((s["channel"], s["node"], False, label))
+        self.sdo_by_cob = by_cob
+
     def node_for(self, node: int, ch: int) -> Optional[NodeEds]:
         return self.nodes.get((ch, node)) or self.nodes.get((None, node))
 
     def clear(self) -> None:
         self.nmt.clear()
         self.emcy.clear()
+        self.sdo.clear()
 
-    def handle(self, ch: int, ts: float, cid: int, data: bytes) -> Optional[str]:
-        """Decode one 11-bit frame (PDO of an assigned node, heartbeat, EMCY); the receive-table text or None."""
+    def _describe(self, ch: int, node: int, index: int, sub: int, data: Optional[bytes]):
+        """(name, value, text, type) of an SDO transfer: from the node's EDS, else CiA 301 names and the bytes as a
+        little-endian number in hex (1, 2 or 4 bytes) or the bytes."""
+        n = self.node_for(node, ch)
+        var = n.od.get_variable(index, sub) if n is not None else None
+        if var is not None and sub != 0 and not isinstance(var.parent, (ODRecord, ODArray)):
+            var = None                             # a VAR object has sub 0 only: get_variable ignores the sub
+        if var is not None:
+            type_ = SEQ_TYPES.get(var.data_type, "bytes")
+            if data is None:
+                return var.qualname, None, "", type_
+            value = value_of(var, data)
+            text = var.value_descriptions.get(value, "") if isinstance(value, int) and not isinstance(value, bool) else ""
+            return var.qualname, value, text, type_
+        name = cia301_name(index, sub)
+        if data is None:
+            return name, None, "", ""
+        if len(data) in (1, 2, 4):
+            return name, f"0x{int.from_bytes(data, 'little'):0{len(data) * 2}X}", "", ""
+        return name, data.hex(" ").upper(), "", ""
+
+    def handle(self, ch: int, ts: float, cid: int, data: bytes, tx: bool = False) -> Optional[str]:
+        """Decode one 11-bit frame (PDO of an assigned node, SDO, heartbeat, EMCY); the receive-table text or None.
+        tx: the frame was sent by this tool."""
         pdos = self.by_cob.get(cid)
         if pdos:
             for p in pdos:
                 if p.channel is None or p.channel == ch:
                     return self._pdo(p, ch, ts, data)
+        servers = self.sdo_by_cob.get(cid)
+        if servers and len(data) == 8:
+            for s_ch, node, request, label in servers:
+                if s_ch is None or s_ch == ch:
+                    return (self.sdo.request(ch, ts, node, data, tx, label) if request
+                            else self.sdo.response(ch, ts, node, data, label)) or None
+        if 0x580 < cid < 0x680 and len(data) == 8 and (cid & 0x7F):
+            node = cid & 0x7F
+            # a known CANopen node only (EDS, heartbeat, or a transfer this tool started): other protocols use
+            # these ids too
+            if cid >= 0x600:
+                if tx or self.sdo.active(ch, node) or (ch, node) in self.nmt or self.node_for(node, ch) is not None:
+                    return self.sdo.request(ch, ts, node, data, tx) or None
+            elif self.sdo.active(ch, node) or (ch, node) in self.nmt or self.node_for(node, ch) is not None:
+                return self.sdo.response(ch, ts, node, data) or None
+            return None
         if 0x700 < cid < 0x780 and len(data) == 1:
             node, state = cid - 0x700, data[0] & 0x7F
             if state in NMT_STATES:

@@ -26,6 +26,19 @@
     return t;
   };
   CO.spaced = (hex) => (hex || "").replace(/(..)(?=.)/g, "$1 ");
+  /* Transmit data text -> the bytes the server sends, as packed upper-case hex (null if it would refuse it).
+     Mirrors core/transmit.py parse_data: "0x" goes, commas split, one-digit words are bytes, one long word is packed. */
+  CO.dataHex = (text) => {
+    const s = String(text || "").replace(/,/g, " ").replace(/0x/gi, "").trim();
+    if (!s) return "";
+    let parts = s.split(/\s+/);
+    if (parts.length === 1 && parts[0].length > 2) {
+      if (parts[0].length % 2) return null;
+      parts = parts[0].match(/../g);
+    }
+    if (!parts.every((p) => /^[0-9a-f]+$/i.test(p) && parseInt(p, 16) <= 0xFF)) return null;
+    return parts.map((p) => parseInt(p, 16).toString(16).toUpperCase().padStart(2, "0")).join("");
+  };
   CO.fmtMs = (v) => (v === undefined || v === null || v === 0 ? "" : v >= 1000 ? (v / 1000).toFixed(2) + " s" : v.toFixed(1));
   CO.fmtNum = (v) => (v ?? 0).toLocaleString();
   CO.fmtBytes = (n) => n > 1e6 ? (n / 1e6).toFixed(1) + " MB" : n > 1e3 ? (n / 1e3).toFixed(0) + " kB" : n + " B";
@@ -57,11 +70,19 @@
   };
 
   // ---------------------------------------------------------------- toasts
+  /* an open modal <dialog> sits in the top layer above everything in <body>, so while it is open
+     #toasts lives inside it (and goes back to <body> when it closes) */
+  const placeToasts = () => {
+    const box = CO.$("#toasts"), dlg = CO.$("#modal");
+    const host = dlg.open ? dlg : document.body;
+    if (box.parentNode !== host) host.appendChild(box);
+  };
   CO.toast = (msg, kind, ms) => {
     const el = document.createElement("div");
     el.className = "toast " + (kind || "");
     el.textContent = msg;
     CO.$("#toasts").appendChild(el);
+    placeToasts();
     setTimeout(() => el.remove(), ms || (kind === "bad" ? 7000 : 3500));
   };
 
@@ -85,11 +106,13 @@
         if (msg) { CO.toast(msg, "bad"); return; }
       }
       dlg.close();
+      placeToasts();
       finish(value === "cancel" ? null : { value, form });
     };
     // one <dialog> serves every modal: the close event of the previous modal can arrive after this one opened
-    dlg.onclose = () => { if (!dlg.open) finish(null); };
+    dlg.onclose = () => { placeToasts(); if (!dlg.open) finish(null); };
     dlg.showModal();
+    placeToasts();
     if (opt.onOpen) opt.onOpen(form);
   });
   CO.confirm = async (title, html, okLabel, danger) => {

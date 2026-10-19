@@ -23,7 +23,7 @@ from fastapi.staticfiles import StaticFiles
 from .core import adapters
 from .core.channel import F_RTR, F_TX
 from .core.engine import EngineError
-from .core.transmit import parse_data, parse_id
+from .core.transmit import parse_bool, parse_data, parse_id
 from .decode import routes as decode_routes
 from .dash import routes as dash_routes
 from .ext import plugin_dirs
@@ -368,9 +368,10 @@ def create_app(svc: Service) -> FastAPI:
     @app.post("/api/send")
     async def send(body: dict = Body(...)):
         data = parse_data(body.get("data", ""))
+        ext = None if body.get("ext") is None else parse_bool(body["ext"], "ext")
         ts = await call(eng.send, int(body.get("channel", 0)), parse_id(body["id"]), data,
-                        ext=body.get("ext"), fd=bool(body.get("fd")), brs=bool(body.get("brs")),
-                        rtr=bool(body.get("rtr")), dlc=body.get("dlc"))
+                        ext=ext, fd=parse_bool(body.get("fd"), "fd"), brs=parse_bool(body.get("brs"), "brs"),
+                        rtr=parse_bool(body.get("rtr"), "rtr"), dlc=body.get("dlc"))
         return {"ok": True, "ts": ts}
 
     # ---------------------------------------------------------------- transmit list
@@ -380,15 +381,15 @@ def create_app(svc: Service) -> FastAPI:
 
     @app.post("/api/tx")
     async def tx_add(body: dict = Body(...)):
-        return svc.tx_add(body)
+        return await call(svc.tx_add, body)
 
     @app.patch("/api/tx/{entry_id}")
     async def tx_update(entry_id: int, body: dict = Body(...)):
-        return svc.tx_update(entry_id, body)
+        return await call(svc.tx_update, entry_id, body)     # waits for a send under way: off the event loop
 
     @app.delete("/api/tx/{entry_id}")
     async def tx_delete(entry_id: int):
-        svc.tx_remove(entry_id)
+        await call(svc.tx_remove, entry_id)
         return {"ok": True}
 
     @app.post("/api/tx/{entry_id}/send")
@@ -397,7 +398,7 @@ def create_app(svc: Service) -> FastAPI:
 
     @app.post("/api/tx/stop_all")
     async def tx_stop_all():
-        eng.tx.stop_all()
+        await call(eng.tx.stop_all)
         return {"ok": True}
 
     # ---------------------------------------------------------------- record / replay / files
@@ -440,7 +441,7 @@ def create_app(svc: Service) -> FastAPI:
         p = svc.resolve_file(body.get("name") or body.get("path", ""))
         bus_map = {int(k): int(v) for k, v in (body.get("bus_map") or {}).items()} or None
         player = await call(eng.start_replay, p, bus_map, speed=float(body.get("speed", 1.0)),
-                            loop=bool(body.get("loop")), only=body.get("only", "all"))
+                            loop=parse_bool(body.get("loop"), "loop"), only=body.get("only", "all"))
         return player.status()
 
     @app.post("/api/replay/stop")
@@ -451,7 +452,7 @@ def create_app(svc: Service) -> FastAPI:
     async def replay_pause(body: dict = Body(...)):
         if eng.player is None:
             raise ServiceError("no replay running")
-        eng.player.pause(bool(body.get("paused", True)))
+        eng.player.pause(parse_bool(body.get("paused", True), "paused"))
         return eng.player.status()
 
     # ---------------------------------------------------------------- nodes

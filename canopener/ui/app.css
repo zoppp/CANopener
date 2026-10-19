@@ -121,6 +121,9 @@ label { color: var(--fg2); }
 .tbl.compact td { padding: 1px 6px; }
 .tbl td.dec { color: var(--fg2); max-width: 560px; overflow: hidden; text-overflow: ellipsis; }
 #dec-body .card { overflow-x: auto; }
+#dec-body tr.pick { cursor: pointer; }
+#dec-body tr.grp td { background: var(--bg3); padding-top: 4px; }
+#dec-body details > summary { cursor: pointer; }
 .empty { padding: 30px; text-align: center; color: var(--fg3); }
 
 /* trace (virtual scroll) */

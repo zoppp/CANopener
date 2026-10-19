@@ -11,6 +11,7 @@
     const used = new Set(CO.state.channels.map((c) => c.index));
     let slot = index; if (slot === undefined) { slot = 0; while (used.has(slot)) slot++; }
     const backends = CO.state.backends;
+    let wantLo = false;                 // the user's listen-only choice, kept while an interface cannot do it
     const body = `
       <div class="row"><label class="field" style="flex:1"><span>Detected adapters</span>
         <select id="c-dev"><option value="">Searching&hellip;</option></select></label>
@@ -26,6 +27,7 @@
         <label class="row" title="The adapter never ACKs or transmits: safe on a live machine"><input type="checkbox" id="c-lo"> Listen-only</label>
       </div>
       <label class="row" id="c-sim-row" title="Simulated CANopen nodes (they answer SDO/LSS and really change their id), PDOs and J1939 traffic"><input type="checkbox" id="c-sim" checked> Start simulated devices on this virtual bus (to try things without hardware)</label>
+      <div id="c-lo-warn" class="notice warn" hidden></div>
       <div id="c-note" class="small muted"></div>
       <div class="small muted">Opens as <b>CAN${slot + 1}</b>. Your choices are remembered.</div>`;
     const res = await CO.modal({
@@ -40,20 +42,25 @@
           if (c.bitrate) $("#c-br").value = c.bitrate;
           $("#c-fd").checked = !!c.fd;
           if (c.data_bitrate) $("#c-dbr").value = c.data_bitrate;
-          $("#c-lo").checked = !!c.listen_only;
+          wantLo = !!c.listen_only;
           update();
         };
         const update = () => {
           const b = backends.find((x) => x.name === ifSel.value) || {};
           $("#c-fd").disabled = !b.fd; if (!b.fd) $("#c-fd").checked = false;
           $("#c-dbr").disabled = !$("#c-fd").checked;
-          $("#c-lo").disabled = !b.listen_only && b.name !== "virtual"; if ($("#c-lo").disabled) $("#c-lo").checked = false;
+          const loOk = !!b.listen_only || b.name === "virtual";
+          $("#c-lo").disabled = !loOk; $("#c-lo").checked = loOk && wantLo;
+          const warn = $("#c-lo-warn");
+          warn.hidden = loOk || !wantLo;
+          warn.textContent = `${b.title || b.name} cannot open listen-only: it will ACK frames on the bus and can send error frames.`;
           $("#c-br").disabled = b.name === "socketcan";
           $("#c-ch").placeholder = "default: " + b.default_channel;
           note.textContent = b.needs ? "Needs: " + b.needs : "";
           $("#c-sim-row").hidden = b.name !== "virtual";
         };
         ifSel.onchange = update; $("#c-fd").onchange = update;
+        $("#c-lo").onchange = () => { wantLo = $("#c-lo").checked; update(); };
         setVals({ interface: "virtual", bitrate: 250000, data_bitrate: 2000000, ...last });
         const devSel = $("#c-dev");
         const loadDevices = async () => {
@@ -72,6 +79,9 @@
     const f = res.form, $ = (s) => CO.$(s, f);
     const body2 = { index: slot, interface: $("#c-if").value, channel: $("#c-ch").value.trim() || null,
       bitrate: +$("#c-br").value, fd: $("#c-fd").checked, data_bitrate: +$("#c-dbr").value, listen_only: $("#c-lo").checked };
+    if (wantLo && !body2.listen_only && !await CO.confirm("Not listen-only",
+      `${CO.esc($("#c-if").selectedOptions[0].textContent)} cannot open listen-only. Connected, it ACKs every frame and can send error frames on the bus (at a wrong bit rate: many).`,
+      "Connect anyway", true)) return;
     if (body2.interface === "virtual" && $("#c-sim").checked) await CO.tryApi("/api/sim/start", { channel: body2.channel || "canopener" });
     const st = await CO.tryApi("/api/connect", body2);
     if (st) {
@@ -199,7 +209,8 @@
       CO.toast(`Opened ${r.name}: ${r.tx} transmit entries`, "good");
       CO.emitProject(r);                              // transmit list, dashboards, decoders reload
       if (r.connections.length && !CO.state.channels.length &&
-          await CO.confirm("Connect?", `Connect the project's adapters now?<br>${r.connections.map((c) => CO.esc(`CAN${c.index + 1}: ${c.interface} ${c.channel ?? ""} ${c.bitrate / 1000} kbit/s`)).join("<br>")}`, "Connect")) {
+          await CO.confirm("Connect?", `Connect the project's adapters now?<br>${r.connections.map((c) => CO.esc(`CAN${c.index + 1}: ${c.interface} ${c.channel ?? ""} ${c.bitrate / 1000} kbit/s`
+            + (c.fd ? " FD" : "") + (c.listen_only ? " listen-only" : " (not listen-only: ACKs frames)"))).join("<br>")}`, "Connect")) {
         for (const c of r.connections) await CO.tryApi("/api/connect", c);
       }
     }

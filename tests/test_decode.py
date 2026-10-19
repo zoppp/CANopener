@@ -257,12 +257,13 @@ def test_config_persists_in_settings_and_projects(svc):
     svc.decode.load_dbc(DBC)
     svc.decode.assign_eds(5, EDS, channel=0)
     svc.decode.set_j1939(1, True)
+    svc.decode.add_sdo_server(7, "627", "0x5A7")
     cfg = svc.settings["decode"]
     assert cfg == {"dbc": [{"path": DBC, "channel": None}], "eds": [{"node": 5, "path": EDS, "channel": 0}],
-                   "j1939": [1]}
+                   "sdo_servers": [{"node": 7, "request": 0x627, "response": 0x5A7, "channel": None}], "j1939": [1]}
     svc.save_project("deco")
     svc.decode.apply_config({})
-    assert svc.decode.config() == {"dbc": [], "eds": [], "j1939": []}
+    assert svc.decode.config() == {"dbc": [], "eds": [], "sdo_servers": [], "j1939": []}
     svc.load_project("deco")
     assert svc.decode.config() == cfg
     s2 = Service(load_plugins=False)                                   # a restart restores it from settings
@@ -294,7 +295,7 @@ def test_files_in_the_app_folder_are_saved_relative_and_survive_moving_it(tmp_pa
         s.shutdown()
     want = {"dbc": [{"path": "decode/test.dbc", "channel": None}],
             "eds": [{"node": 5, "path": "decode/test_node.eds", "channel": None},
-                    {"node": 6, "path": EDS, "channel": None}], "j1939": []}
+                    {"node": 6, "path": EDS, "channel": None}], "sdo_servers": [], "j1939": []}
     assert json.loads((old / "settings.json").read_text(encoding="utf-8"))["decode"] == want
     assert json.loads((old / "projects" / "p.json").read_text(encoding="utf-8"))["decode"] == want
 
@@ -394,6 +395,21 @@ def test_decoder_sdo_read_waits_for_node_operations(sim_svc):
         t = threading.Thread(target=lambda: err.append(_try_read(sim_svc)))
         t.start(); t.join(5)
     assert err and "using the bus" in err[0]
+
+
+def test_sdo_read_refuses_node_ids_outside_1_to_127(sim_svc):
+    """canopen sends to 0x600 + node for any number: node -1019 would write node 5's RPDO1 (0x205), -0x580 SYNC."""
+    from canopener.decode.manager import DecodeError
+    ch = sim_svc.engine.channels[0]
+    sent = ch.tx_frames
+    for node in (-1019, -0x580, 0, 128, 200):
+        with pytest.raises(DecodeError, match="out of range"):
+            sim_svc.decode.sdo_read(0, node, 0x1000, 0)
+    with pytest.raises(DecodeError, match="out of range"):
+        sim_svc.decode.sdo_read(0, 5, 0x10000, 0)
+    time.sleep(0.1)
+    assert ch.tx_frames == sent                                   # nothing went on the bus
+    assert sim_svc.decode.sdo_read(0, 5, 0x1000, 0)["raw"]        # 1..127 still reads
 
 
 def _try_read(svc):

@@ -43,25 +43,30 @@ class HeartbeatMonitor(Extension):
                 n = self.nodes.get(key)
                 if n is None:
                     n = self.nodes[key] = {"channel": ch, "node": key[1], "count": 0, "period_ms": 0.0, "last": 0.0,
-                                           "state": "", "boots": 0}
-                elif n["last"]:
-                    p = (ts - n["last"]) * 1000
-                    n["period_ms"] = p if not n["period_ms"] else n["period_ms"] * 0.8 + p * 0.2
+                                           "state": "", "boots": 0, "heartbeats": 0, "last_hb": 0.0, "_prev": 0.0}
                 n["count"] += 1
                 n["last"] = ts
                 st = data[0] & 0x7F
                 n["state"] = STATES.get(st, f"0x{st:02X}")
-                if st == 0:
-                    n["boots"] += 1
+                if st == 0:                        # a boot-up is not a heartbeat: no period, and the gap across
+                    n["boots"] += 1                # the reset does not count as one either
+                    n["_prev"] = 0.0
+                    continue
+                if n["_prev"]:
+                    p = (ts - n["_prev"]) * 1000
+                    n["period_ms"] = p if not n["period_ms"] else n["period_ms"] * 0.8 + p * 0.2
+                n["heartbeats"] += 1
+                n["last_hb"] = n["_prev"] = ts
 
     def snapshot(self) -> list[dict]:
         now = time.time()
         with self._lock:
             out = []
             for n in sorted(self.nodes.values(), key=lambda n: (n["channel"], n["node"])):
-                age = (now - n["last"]) * 1000
-                lost = bool(n["period_ms"]) and age > 3 * max(n["period_ms"], 50)
-                out.append({**n, "age_ms": round(age), "period_ms": round(n["period_ms"], 1), "lost": lost})
+                hb_age = (now - n["last_hb"]) * 1000
+                lost = bool(n["period_ms"]) and hb_age > 3 * max(n["period_ms"], 50)
+                out.append({**{k: v for k, v in n.items() if k[0] != "_"}, "age_ms": round((now - n["last"]) * 1000),
+                            "period_ms": round(n["period_ms"], 1), "lost": lost, "boot_only": not n["heartbeats"]})
             return out
 
     def routes(self, router, svc) -> None:
@@ -78,7 +83,9 @@ class HeartbeatMonitor(Extension):
     def mcp_tools(self, mcp, svc, run) -> None:
         @mcp.tool()
         def get_heartbeat_nodes() -> dict:
-            """CANopen nodes seen by their heartbeat: NMT state, average period, time since the last one, lost flag."""
+            """CANopen nodes seen by their heartbeat: NMT state, average period, time since the last frame, lost flag
+            (no heartbeat for 3 periods). Boot-ups are counted but are not heartbeats: boot_only = boot-ups and no
+            heartbeat yet (no period, never lost)."""
             return {"nodes": self.snapshot()}
 
     def shutdown(self, svc) -> None:

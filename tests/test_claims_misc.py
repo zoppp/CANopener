@@ -218,13 +218,75 @@ def test_replay_loop_starts_over(tmp_path):
     """user-guide 354: Loop starts over at the end."""
     path = _replay_file(tmp_path, n=5, step=0.01)
     sink = _Sink()
-    p = Player(path, sink, {1: 0}, speed=100.0, loop=True)
+    p = Player(path, sink, {1: 0}, speed=2.0, loop=True)       # a 40 ms file: a 20 ms pass
     try:
         assert _wait(lambda: p.loops >= 2)
     finally:
         p.stop()
     ids = [m.arbitration_id for _, _, m in sink.got]
     assert ids[:10] == [0x100, 0x201, 0x102, 0x203, 0x104] * 2 and p.state == "stopped"
+
+
+def test_replay_loop_keeps_a_gap_between_passes(tmp_path):
+    """A loop pass starts one frame gap after the last frame: 2 frames 50 ms apart repeat every 100 ms, not 50."""
+    path = _replay_file(tmp_path, n=2, step=0.05)
+    sink = _Sink()
+    p = Player(path, sink, {1: 0}, loop=True)
+    try:
+        time.sleep(1.0)
+    finally:
+        p.stop()
+    assert 14 <= len(sink.got) <= 24                       # about 20; back to back passes would give about 40
+    gaps = sorted(b[0] - a[0] for a, b in zip(sink.got, sink.got[1:]))
+    assert gaps[len(gaps) // 2] > 0.04                     # Windows timer jitter can make a single gap short
+
+
+def test_replay_refuses_to_loop_a_file_shorter_than_10_ms(tmp_path):
+    """Looping a one-frame (or burst) file sent it back to back: tens of thousands of frames a second."""
+    path = _replay_file(tmp_path, n=1)
+    sink = _Sink()
+    p = Player(path, sink, {1: 0}, loop=True)
+    assert _wait(lambda: p.state != "playing")
+    assert p.state == "error" and "back to back" in p.last_error and sink.got == []
+    once = Player(path, sink, {1: 0})                       # without loop it plays once
+    assert _wait(lambda: once.state == "done") and len(sink.got) == 1
+
+
+def test_stopping_a_replay_does_not_send_the_next_frame_early(tmp_path):
+    """Stop woke the wait for the next frame and then sent that frame at once (seen live: a disconnect mid-gap
+    logged a send error for the frame due 3 s later)."""
+    path = _replay_file(tmp_path, n=3, step=1.0)
+    sink = _Sink()
+    p = Player(path, sink, {1: 0})
+    assert _wait(lambda: len(sink.got) == 1)
+    p.stop()
+    time.sleep(0.2)
+    assert len(sink.got) == 1 and p.state == "stopped"
+
+
+def test_disconnect_stops_a_replay_on_that_channel(engine, tmp_path):
+    """The replay must not carry on onto the next adapter connected at the same channel index."""
+    path = tmp_path / "gap.trc"
+    rec = Recorder(path, {0: 1})
+    for i, (t, cid) in enumerate(((0.0, 0x111), (0.6, 0x222), (0.7, 0x333))):
+        rec.put(0, (50.0 + t, cid, 0, 1, bytes([i])))
+    rec.stop()
+    a, b = f"rp-a-{time.time_ns()}", f"rp-b-{time.time_ns()}"
+    engine.connect(ChannelConfig("virtual", a))
+    p = engine.start_replay(path)
+    assert _wait(lambda: p.sent >= 1)
+    engine.disconnect(0)
+    assert p.state == "stopped"
+    listener = can.Bus(interface="virtual", channel=b)
+    try:
+        engine.connect(ChannelConfig("virtual", b), index=0)
+        time.sleep(1.0)
+        got = []
+        while (m := listener.recv(0)) is not None:
+            got.append(m.arbitration_id)
+        assert got == [] and p.sent == 1
+    finally:
+        listener.shutdown()
 
 
 def test_replay_pause_and_resume(tmp_path):
@@ -631,3 +693,20 @@ def test_frames_without_device_timestamp_use_time_time(monkeypatch):
     h0 = time.time()
     script = [(h0 + i * 0.01, 0.0) for i in range(10)]
     assert _run_script(monkeypatch, "pcan", script) == [h for h, _ in script]
+
+
+@pytest.mark.parametrize("speed", [float("nan"), float("inf"), 0, -1, 101, True and "fast"])
+def test_replay_speed_must_be_finite_and_bounded(tmp_path, speed):
+    """Review: NaN/inf passed the old "> 0" check and a looped replay then sent back to back (bus flood)."""
+    path = _replay_file(tmp_path, n=5, step=0.01)
+    with pytest.raises(ValueError, match="speed"):
+        Player(path, _Sink(), {1: 0}, speed=speed, loop=True)
+
+
+def test_replay_loop_guard_counts_the_speed(tmp_path):
+    """Review: a 40 ms file passed the 10 ms loop guard, but at 100x one pass takes 0.4 ms."""
+    path = _replay_file(tmp_path, n=5, step=0.01)
+    sink = _Sink()
+    p = Player(path, sink, {1: 0}, speed=100.0, loop=True)
+    assert _wait(lambda: p.state == "error")
+    assert "100x" in p.last_error and not sink.got

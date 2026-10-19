@@ -18,7 +18,8 @@ passes. Inside a raw frame's data, "$NEW_ID" is replaced with the value as one h
                                                       activate_bit_timing (delay_ms), store, inquire_node_id
   delay       ms
   reopen      kbit                                    reopen the adapter at another bit rate
-  wait_node   node, timeout_s                         node answers (heartbeat/boot-up or SDO 0x1000)
+  wait_node   node, timeout_s, [vendor, product, serial]   node answers an SDO read (0x1000; with vendor/product/
+                                                      serial its 0x1018 must hold those: the same device)
   wait_traffic timeout_s                              any frame arrives
 
 Common fields: "always": true runs the step even after an earlier step failed (cleanup, e.g. LSS back to
@@ -225,7 +226,8 @@ def preview_step(step: dict, vars: dict) -> dict:
                    "note": "upload request"}]
         text = f"SDO read node {node} 0x{index:04X}:{sub:02X} as {step.get('type', 'bytes')}"
         if "expect" in step:
-            text += f", must equal {resolve(step['expect'], vars)!r}"
+            want = resolve(step["expect"], vars)
+            text += f", must equal {f'0x{want:X}' if isinstance(want, int) and not isinstance(want, bool) else repr(want)}"
         expect = (f"0x{0x580 + node:03X} 4x ... (upload response); without an answer the SDO client sends an "
                   f"abort 0x{0x600 + node:03X} 80 ...")
     elif op == "store":
@@ -249,10 +251,11 @@ def preview_step(step: dict, vars: dict) -> dict:
     elif op == "raw":
         can_id = _int(step.get("id"), vars, "id")
         data = _raw_data(step.get("data", ""), vars)
-        ext = bool(step.get("ext", can_id > 0x7FF))
-        fd, brs = bool(step.get("fd")), bool(step.get("fd") and step.get("brs"))
-        from ..core.transmit import build_message
+        from ..core.transmit import build_message, parse_bool
         try:                                       # exactly what goes out (CAN FD pads to a valid length)
+            ext = parse_bool(step.get("ext", can_id > 0x7FF), "ext")
+            fd = parse_bool(step.get("fd"), "fd")
+            brs = fd and parse_bool(step.get("brs"), "brs")
             data = bytes(build_message(can_id, data, ext=ext, fd=fd, brs=brs).data)
         except ValueError as exc:
             raise SequenceError(str(exc)) from exc
@@ -279,9 +282,18 @@ def preview_step(step: dict, vars: dict) -> dict:
         text = f"Reopen the adapter at {kbit} kbit/s"
     elif op == "wait_node":
         node = _node(step, vars)
-        text = f"Check node {node} answers (heartbeat/boot-up or SDO 0x1000), up to {step.get('timeout_s', 5)} s"
-        frames = [{"id": 0x600 + node, "data": _hex(bytes([0x40, 0x00, 0x10, 0x00]) + bytes(4)),
-                   "note": "SDO read 0x1000, repeated until the node answers (an abort follows each timeout)"}]
+        ident = _identity(step, vars)
+        if ident:
+            want = ", ".join(f"0x1018:{s:02X} = 0x{v:X}" for s, v in sorted(ident.items()))
+            text = f"Check node {node} answers as the same device ({want}), up to {step.get('timeout_s', 5)} s"
+            frames = [{"id": 0x600 + node, "data": _hex(bytes([0x40, 0x18, 0x10, s]) + bytes(4)),
+                       "note": f"SDO read 0x1018:{s:02X}" + (", repeated until the node answers (an abort follows "
+                                                              "each timeout)" if i == 0 else "")}
+                      for i, s in enumerate(sorted(ident))]
+        else:
+            text = f"Check node {node} answers (SDO 0x1000), up to {step.get('timeout_s', 5)} s"
+            frames = [{"id": 0x600 + node, "data": _hex(bytes([0x40, 0x00, 0x10, 0x00]) + bytes(4)),
+                       "note": "SDO read 0x1000, repeated until the node answers (an abort follows each timeout)"}]
     elif op == "wait_traffic":
         text = f"Check traffic arrives, up to {step.get('timeout_s', 5)} s"
     else:
@@ -358,24 +370,41 @@ def _sdo_node(ctx: Context, node_id: int):
     return node
 
 
-def _wait_node(ctx: Context, node_id: int, timeout: float) -> bool:
+IDENTITY_SUBS = {"vendor": 1, "product": 2, "serial": 4}      # wait_node keys -> 0x1018 sub-index
+
+
+def _identity(step: dict, vars: dict) -> dict:
+    """{0x1018 sub: expected value} from a wait_node step's vendor / product / serial."""
+    return {sub: _int(step[k], vars, k) for k, sub in IDENTITY_SUBS.items() if k in step}
+
+
+def _wait_node(ctx: Context, node_id: int, timeout: float, identity: dict) -> bool:
+    """True once node_id answers an SDO read: with `identity`, 0x1018 must hold those values (the device that was
+    moved, not another one at that id); without, any answer to 0x1000. Only SDO answers count: canopen's scanner
+    also counts 29-bit and free-form frames whose low bits match the id (J1939 0x0CF00482 "is" node 2)."""
     net = ctx.network
-    net.scanner.reset()
     deadline = time.monotonic() + timeout
     node = _sdo_node(ctx, node_id)
     try:
         while time.monotonic() < deadline:
-            if node_id in net.scanner.nodes:
-                ctx.log(f"node {node_id}: heartbeat/boot-up/traffic seen")
-                return True
             node.sdo.RESPONSE_TIMEOUT = max(0.05, min(0.5, deadline - time.monotonic()))
             try:
-                node.sdo.upload(0x1000, 0)
-                ctx.log(f"node {node_id}: answered SDO 0x1000")
+                if not identity:
+                    node.sdo.upload(0x1000, 0)
+                    ctx.log(f"node {node_id}: answered SDO 0x1000")
+                    return True
+                for sub, want in sorted(identity.items()):
+                    got = unpack_value("u32", node.sdo.upload(0x1018, sub))
+                    if got != want:
+                        raise SequenceError(f"node {node_id} answers, but 0x1018:{sub:02X} = 0x{got:X}, not 0x{want:X}: "
+                                            "another device has this id")
+                ctx.log(f"node {node_id}: answered with the expected identity")
                 return True
-            except SdoAbortedError:
-                ctx.log(f"node {node_id}: SDO abort on 0x1000 (present)")
-                return True
+            except SdoAbortedError as exc:
+                if not identity:
+                    ctx.log(f"node {node_id}: SDO abort on 0x1000 (present)")
+                    return True
+                raise SequenceError(f"node {node_id} answers, but refuses to give its identity ({exc})") from exc
             except SdoCommunicationError:
                 continue
         return False
@@ -430,6 +459,8 @@ def _run_step(ctx: Context, step: dict, vars: dict) -> Any:
         if "expect" in step:
             want = resolve(step["expect"], vars)
             if value != want:
+                if isinstance(value, int) and isinstance(want, int):
+                    raise SequenceError(f"read 0x{value:X}, expected 0x{want:X}")
                 raise SequenceError(f"read {value!r}, expected {want!r}")
         return value
     if op == "store":
@@ -462,7 +493,7 @@ def _run_step(ctx: Context, step: dict, vars: dict) -> Any:
         return None
     if op == "wait_node":
         node_id = _node(step, vars)
-        if not _wait_node(ctx, node_id, float(step.get("timeout_s", 5))):
+        if not _wait_node(ctx, node_id, float(step.get("timeout_s", 5)), _identity(step, vars)):
             raise SequenceError(f"node {node_id} did not answer within {step.get('timeout_s', 5)} s")
         return True
     if op == "wait_traffic":
@@ -472,6 +503,9 @@ def _run_step(ctx: Context, step: dict, vars: dict) -> Any:
             raise SequenceError(f"no traffic within {step.get('timeout_s', 5)} s")
         return True
     raise SequenceError(f"unknown op {op!r}")
+
+
+WRITE_OPS = ("sdo_write", "store", "nmt", "raw", "lss")     # ops that change something on the bus or a node
 
 
 def execute(steps: list[dict], ctx: Context) -> RunResult:
@@ -510,6 +544,12 @@ def execute(steps: list[dict], ctx: Context) -> RunResult:
             result.steps.append(StepResult(i, step["op"], pv["text"], "failed", detail))
             if not failed:
                 failed, result.ok, result.error = True, False, f"step {i} ({pv['text']}): {detail}"
+    if not result.ok:                             # say what already went out: a stored value can still apply
+        end = next((s.index for s in result.steps if s.status in ("failed", "skipped")), len(steps) + 1)
+        sent = [s.text for s in result.steps if s.index < end and s.status == "ok" and s.op in WRITE_OPS]
+        if sent:
+            result.error += (f". Already sent before that: {'; '.join(sent)}. A written or stored value can take "
+                             "effect at the device's next reset or power cycle")
     if interrupt is not None:
         raise interrupt
     return result

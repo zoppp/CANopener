@@ -81,6 +81,7 @@
       { label: "Set ID...", disabled: n.recipe_method === "readonly", action: () => setIdDialog(n.node_id) },
       { label: "Bit rate...", disabled: n.baud === "none", action: () => baudDialog(n.node_id) },
       { label: "Use in the custom sequence", action: () => useNode(n.node_id) },
+      { label: "Assign EDS file...", action: () => CO.edsAssignDialog(n.node_id, channel) },
       { separator: true },
       { label: "Copy identity", action: () => CO.copyText(ident, "identity") },
       { label: "Copy row", action: () => CO.copyText(CO.tableText([tr]), "1 row") },

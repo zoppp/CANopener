@@ -100,8 +100,9 @@
     const html = txEntries.map((e) => {
       const live = CO.state.txLive[e.id] || e;
       const flags = (e.ext ? F.EXT : 0) | (e.fd ? F.FD : 0) | (e.brs ? F.BRS : 0) | (e.rtr ? F.RTR : 0);
-      const data = e.rtr ? `<span class="muted">remote, DLC ${e.dlc}</span>` : CO.esc(CO.spaced((e.data || "").replace(/[^0-9a-f]/gi, "").toUpperCase()));
-      const nbytes = (e.data || "").replace(/[^0-9a-f]/gi, "").length / 2;
+      const hex = CO.dataHex(e.data);                     // exactly what the server sends
+      const data = e.rtr ? `<span class="muted">remote, DLC ${e.dlc}</span>` : CO.esc(hex === null ? e.data : CO.spaced(hex));
+      const nbytes = hex === null ? "?" : hex.length / 2;
       return `<tr data-tx="${e.id}" class="${txRows.has(e.id) ? "sel" : ""}">
         <td><input type="checkbox" data-act="cyc" ${live.enabled ? "checked" : ""} ${e.period_ms > 0 ? "" : "disabled"} title="${e.period_ms > 0 ? "Send cyclically" : "Set a cycle time to send cyclically"}"></td>
         ${multi ? `<td>${CO.esc(CO.chName(e.channel))}</td>` : ""}
@@ -198,7 +199,7 @@
   const txFlags = (e) => (e.ext ? F.EXT : 0) | (e.fd ? F.FD : 0) | (e.brs ? F.BRS : 0) | (e.rtr ? F.RTR : 0);
   function txText(keys) {                                 // columns that CO.parseFrames reads back
     return ["Ch\tID\tType\tDLC\tData\tCycle ms\tComment"].concat(keys.map((id) => txEntries.find((e) => e.id === id)).filter(Boolean).map((e) => {
-      const hex = (e.data || "").replace(/[^0-9a-f]/gi, "").toUpperCase();
+      const hex = CO.dataHex(e.data) || "";
       return [CO.chName(e.channel), CO.idText(e.can_id, txFlags(e)), CO.typeText(txFlags(e)), e.rtr ? e.dlc : hex.length / 2,
         e.rtr ? "remote request" : CO.spaced(hex), e.period_ms > 0 ? e.period_ms : "manual", (e.comment || "").replace(/\s+/g, " ")].join("\t");
     })).join("\n");

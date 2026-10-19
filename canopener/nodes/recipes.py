@@ -68,6 +68,8 @@ def load_recipes(path: Optional[Union[str, Path]] = None, include_user: bool = T
                 if _int_key(existing) == _int_key(key):
                     base = vendors.pop(existing)
             merged = {**base, **r, "user": True}
+            if "product_code" not in r:            # the bundled model's code must not carry the user's steps
+                merged.pop("product_code", None)   # to that model only: vendor-wide, so the preview warns
             merged.setdefault("method", recipes.get("default", {}).get("method", "lss"))
             merged.setdefault("source", "user recipe")
             vendors[key] = merged
@@ -138,6 +140,37 @@ def resolve_recipe(recipes: dict, vendor_id: Optional[int], override: Optional[s
             return recipe
 
     return recipes.get("default", {"method": "lss", "name": "default-lss"})
+
+
+def vendor_wide(recipe: dict) -> bool:
+    """An SDO or sequence recipe without a "product_code": picked for every product of its vendor, while the
+    objects it writes are those of one model (on another model they can mean something else)."""
+    return recipe.get("method") in ("sdo", "sequence") and recipe.get("product_code") is None
+
+
+def forced_fit_warning(recipes: dict, recipe: dict, info) -> str:
+    """A recipe chosen by name (Method) for a device whose 0x1018 vendor or product is not the recipe's own."""
+    if info is None or recipe.get("method") not in ("sdo", "sequence"):
+        return ""
+    for key, r in recipes.get("vendors", {}).items():
+        if r.get("name") != recipe.get("name"):
+            continue
+        vid, want = _int_key(key), r.get("product_code")
+        if info.vendor_id is not None and vid != info.vendor_id:
+            return (f"Recipe {recipe.get('name')} is for vendor 0x{vid:X}; this device reports vendor "
+                    f"0x{info.vendor_id:X}. Its objects can mean something else on this device.")
+        if want is not None and info.product_code is not None and _int_key(want) != info.product_code:
+            return (f"Recipe {recipe.get('name')} is for product 0x{_int_key(want):X}; this device reports product "
+                    f"0x{info.product_code:X}. Its objects can mean something else on this model.")
+        return ""
+    return ""
+
+
+def vendor_wide_warning(recipe: dict, info) -> str:
+    product = f"0x{info.product_code:X}" if info is not None and info.product_code is not None else "unknown"
+    return (f"Recipe {recipe.get('name', '?')} matches every product of vendor 0x{info.vendor_id or 0:X}, not one "
+            f"model (this device reports product {product}). Check it is the model the recipe was written for: "
+            "on another model these objects can mean something else.")
 
 
 def recipe_list(recipes: dict) -> list[dict]:
@@ -250,6 +283,7 @@ def baud_sdo_steps(spec: dict, new_kbit: int, verify_timeout: float = 5.0) -> tu
         return steps, effect
     if effect == "nmt_reset":
         steps.append({"op": "nmt", "command": "reset_node", "node": "$OLD_ID"})
-    steps += [{"op": "delay", "ms": 500}, {"op": "reopen", "kbit": "$BAUD"},
+    # from here on the node runs at the new rate: a stop request must not keep the adapter at the old one
+    steps += [{"op": "delay", "ms": 500, "nostop": True}, {"op": "reopen", "kbit": "$BAUD", "nostop": True},
               {"op": "wait_traffic", "timeout_s": verify_timeout, "optional": True, "note": "verification"}]
     return steps, effect

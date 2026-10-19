@@ -11,7 +11,7 @@
     if (!d) return;
     nodes = d.nodes;
     CO.$("#hb-body", el).innerHTML = nodes.map((n) => `<tr data-k="${CO.esc(key(n))}" class="${n.lost ? "err" : ""} ${sel.has(key(n)) ? "sel" : ""}"><td>${CO.esc(CO.chName(n.channel))}</td>
-      <td class="r m"><b>${n.node}</b></td><td>${CO.esc(n.state)}${n.lost ? ` <span class="badge bad">lost</span>` : ""}</td>
+      <td class="r m"><b>${n.node}</b></td><td>${CO.esc(n.state)}${n.lost ? ` <span class="badge bad">lost</span>` : ""}${n.boot_only ? ` <span class="badge warn">boot-up only / no heartbeat</span>` : ""}</td>
       <td class="r m">${n.period_ms || ""}</td><td class="r m">${n.age_ms}</td><td class="r m">${n.count}</td><td class="r m">${n.boots}</td></tr>`).join("")
       || `<tr><td colspan="7" class="empty">No heartbeats yet (0x701-0x77F).</td></tr>`;
   }

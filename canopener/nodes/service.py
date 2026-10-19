@@ -82,6 +82,7 @@ class NodeService:
     def __init__(self, engine: Engine):
         self.engine = engine
         self.scans: dict[int, scan_mod.ScanResult] = {}
+        self._scan_bus: dict[int, dict] = {}       # the connection each scan was made on (see scan_for)
         self.plans: dict[str, Plan] = {}
         self.job: Optional[Job] = None
         self._lock = threading.Lock()
@@ -174,7 +175,20 @@ class NodeService:
             result = scan_mod.scan(net, passive_seconds=passive_s, sdo_timeout=sdo_timeout, log=log_fn,
                                    active=active)
         self.scans[index] = result
+        self._scan_bus[index] = self._bus_key(index)
         return result
+
+    def scan_for(self, index: int) -> Optional[scan_mod.ScanResult]:
+        """The last scan of this channel, or None when the adapter was reconnected or changed since: after a
+        reconnect the bus (or the device at an id) may be another one, so the scan says nothing about it."""
+        r = self.scans.get(index)
+        try:
+            same = r is not None and self._scan_bus.get(index) == self._bus_key(index)
+        except EngineError:
+            same = False
+        if r is not None and not same:
+            self.scans.pop(index, None)
+        return r if same else None
 
     def scan_job(self, index: int, passive_s: float = 2.5, sdo_timeout: float = 0.03) -> Job:
         self._live_channel(index, transmit=False)
@@ -186,7 +200,7 @@ class NodeService:
         return self.start_job("scan", f"Scan {self.engine.channel(index).name}", fn)
 
     def scan_dict(self, index: int) -> Optional[dict]:
-        r = self.scans.get(index)
+        r = self.scan_for(index)
         if r is None:
             return None
         d = r.as_dict()
@@ -222,9 +236,10 @@ class NodeService:
     def plan_set_id(self, index: int, old_id: int, new_id: int, method: Optional[str] = None,
                     verify_timeout: float = 5.0) -> Plan:
         self._live_channel(index)
-        scan_result = self.scans.get(index)
+        scan_result = self.scan_for(index)
         if scan_result is None:
-            raise NodeError("scan the bus first (the conflict check and the recipe need it)")
+            raise NodeError("scan the bus first (the conflict check and the recipe need it; a reconnect "
+                            "makes the last scan stale)")
         if old_id not in scan_result.nodes:
             raise NodeError(f"node {old_id} was not found in the last scan")
         try:
@@ -232,6 +247,13 @@ class NodeService:
         except setid.SetIdError as exc:
             raise NodeError(str(exc)) from exc
         warnings = []
+        info = scan_result.nodes.get(old_id)
+        if method is None and recipes_module.vendor_wide(sp.recipe):
+            warnings.append(recipes_module.vendor_wide_warning(sp.recipe, info))
+        if method is not None:
+            fit = recipes_module.forced_fit_warning(self.recipes(), sp.recipe, info)
+            if fit:
+                warnings.append(fit)
         if sp.conflict.has_conflict:
             warnings.append(str(setid.ConflictError(sp.conflict)))
         if sp.effect == "power_cycle":
@@ -260,12 +282,14 @@ class NodeService:
             warnings.append("Every LSS device on the bus switches. Devices without LSS stay at "
                             f"{ch.cfg.bitrate // 1000} kbit/s and will not be heard after the adapter reopens.")
         else:
-            scan_result = self.scans.get(index)
+            scan_result = self.scan_for(index)
             info = scan_result.nodes.get(node) if scan_result else None
             if info is None:
                 raise NodeError(f"node {node} was not found in the last scan; scan first")
             recipe = recipes_module.resolve_recipe(self.recipes(), info.vendor_id, product_code=info.product_code)
             meta["recipe"] = recipe.get("name", recipe.get("method"))
+            if (recipe.get("baud_steps") or recipe.get("baud_sdo")) and recipe.get("product_code") is None:
+                warnings.append(recipes_module.vendor_wide_warning(recipe, info))
             if recipe.get("baud_steps"):
                 steps = [dict(s) for s in recipe["baud_steps"]]
                 vars = {"OLD_ID": node, "NODE": node, "BAUD": new_kbit,
@@ -273,7 +297,12 @@ class NodeService:
                 meta["method"] = "user sequence"
             elif recipe.get("baud_sdo"):
                 steps, vars, effect = baud_mod.plan_sdo(node, recipe["baud_sdo"], new_kbit, verify_timeout)
+                vars.update(recipes_module.identity_vars(info))
                 meta["method"] = "sdo"
+            if recipe.get("baud_steps") or recipe.get("baud_sdo"):
+                # like Set ID: read 0x1018 at the node first, so a swapped module or another machine since the
+                # scan stops the run before anything is written
+                steps = setid._with_identity_checks(steps, {"method": "sdo"}, info)
                 if recipe["baud_sdo"].get("note"):
                     warnings.append(recipe["baud_sdo"]["note"])
             elif recipe.get("method") == "lss":
@@ -315,7 +344,7 @@ class NodeService:
                         and str(s.get("state", "waiting")) == "waiting" for s in steps):
             warnings.append("This switches LSS devices to configuration state with no 'always' step back to "
                             "waiting: a failure would leave them there.")
-        scan_result = self.scans.get(index)
+        scan_result = self.scan_for(index)
         if "NEW_ID" in vars and scan_result is not None and "OLD_ID" in vars:
             c = setid.check_conflict(scan_result, int(vars["OLD_ID"]), int(vars["NEW_ID"]))
             if c.has_conflict:
@@ -371,15 +400,19 @@ class NodeService:
         with self.bus, self.network(plan.channel) as (net, ch):
             if plan.kind == "set_id":
                 ctx = self._context(net, ch, plan, logline, job)
-                res = setid.run_plan(net, plan.set_plan, logline, send_raw=ctx.send_raw, stop=ctx.stop)
+                try:
+                    res = setid.run_plan(net, plan.set_plan, logline, send_raw=ctx.send_raw, stop=ctx.stop)
+                finally:
+                    self.scans.pop(plan.channel, None)       # node ids changed (maybe half way): the scan is stale
                 logline(f"result: {res.message}")
-                self.scans.pop(plan.channel, None)           # node ids changed: the scan is stale
                 return {"ok": True, "message": res.message, "verified": res.verified,
                         "power_cycle_required": res.power_cycle_required, "old_id": res.old_id,
                         "new_id": res.new_id, "method": res.method}
             ctx = self._context(net, ch, plan, logline, job)
             result = sequence.execute(plan.steps, ctx)
         out = result.as_dict()
+        if plan.kind == "custom" and any(s.get("op") in sequence.WRITE_OPS for s in plan.steps):
+            self.scans.pop(plan.channel, None)       # it may have moved a node: the "id in use" check needs a scan
         if plan.kind == "baud":
             wait = result.value_of("wait_traffic")
             out["verified"] = bool(wait and wait.status == "ok")

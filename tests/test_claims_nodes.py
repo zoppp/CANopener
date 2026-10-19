@@ -246,7 +246,7 @@ DOCUMENTED_READ_TOOLS = {
     "scan_nodes", "get_node_scan", "get_node_job", "list_recipes",
     "get_set_node_id_preview", "get_baud_preview", "get_sequence_preview", "get_sdo_write_preview", "get_nmt_preview",
     "get_decode_config", "list_dbc_messages", "get_canopen_state", "list_object_dictionary", "read_sdo",
-    "get_j1939_state",
+    "get_j1939_state", "get_pdo_values", "get_sdo_log", "get_dbc_message_values", "get_j1939_source",
     "list_dashboards", "get_dashboard",
     "get_heartbeat_nodes", "get_eds_problems", "list_eds_objects", "get_eds_pdos", "read_node_vs_eds",
     "get_sniffer_changes",

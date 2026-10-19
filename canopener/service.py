@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import threading
 import time
@@ -229,6 +230,10 @@ class Service:
         folder = recordings_dir().resolve()
         p = Path(name_or_path)
         if p.is_absolute() or len(p.parts) > 1:
+            # decide by the text first: resolving a foreign path opens it (\\host\share\x is an SMB connection that
+            # hands the Windows login hash to that host), and any web page can ask with an <img> GET
+            if Path(os.path.abspath(p)).parent not in (folder, Path(os.path.abspath(recordings_dir()))):
+                raise ServiceError("only files in the recordings folder can be used here; import the file first")
             p = p.resolve()
             if p.parent != folder:
                 raise ServiceError("only files in the recordings folder can be used here; import the file first")
