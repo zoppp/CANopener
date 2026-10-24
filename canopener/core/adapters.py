@@ -4,10 +4,12 @@ Every backend goes through python-can. This module only knows each backend's qui
 which keyword turns on listen-only, how CAN FD is configured, what its default channel is,
 and how to find devices that are plugged in (CANable boards in particular, which come with
 either slcan firmware, a COM port, or candleLight firmware, a WinUSB device).
+Two backends are CANopener's own python-can buses (not in python-can): GVRET (gvret.py) and OBDLink (obdlink.py).
 """
 
 from __future__ import annotations
 
+import importlib
 import logging
 import os
 import sys
@@ -42,6 +44,10 @@ BACKENDS: dict[str, Backend] = {b.name: b for b in (
     Backend("gs_usb", "CANable / candleLight (USB)", 0, False, False, "candleLight firmware (WinUSB)"),
     Backend("vector", "Vector", 0, True, True, "Vector XL driver library"),
     Backend("ixxat", "IXXAT", 0, False, True, "IXXAT VCI driver"),
+    Backend("gvret", "GVRET (ESP32RET, Macchina M2) - untested", "COM3", True, False,
+            "COM port or socket://<ip>:23 for WiFi; USB-UART boards at 1 Mbaud"),
+    Backend("obdlink", "OBDLink MX/LX/SX/EX (OBD-II) - untested", "COM3", True, False,
+            "Bluetooth or USB COM port, or socket://<ip>:35000 for WiFi; sending pauses receiving"),
     Backend("socketcan", "Linux SocketCAN", "can0", False, True, "Linux only", bitrate_kwarg=False),
     Backend("virtual", "Virtual (no hardware)", "canopener", False, True, ""),
 )}
@@ -52,6 +58,8 @@ DEFAULT_CHANNELS = {name: b.default_channel for name, b in BACKENDS.items()}
 # USB ids of CANable-style boards.
 _SLCAN_USB_IDS = {(0x16D0, 0x117E): "CANable (slcan)", (0xAD50, 0x60C4): "CANable 2 (slcan)",
                   (0x0483, 0x5740): "STM32 virtual COM port (CANable clone with slcan?)"}
+# Our own bus classes, opened directly: python-can's can.Bus() only accepts its registered interfaces.
+_OWN_BUSES = {"gvret": ("canopener.core.gvret", "GvretBus"), "obdlink": ("canopener.core.obdlink", "ObdlinkBus")}
 _GS_USB_IDS = {(0x1D50, 0x606F): "candleLight / gs_usb", (0x1209, 0x2323): "candleLight (budgetcan)",
                (0x1CD2, 0x606F): "CANable-MKS (gs_usb)", (0x16D0, 0x10B8): "CANtact Pro (gs_usb)"}
 
@@ -212,6 +220,18 @@ def bus_kwargs(cfg: ChannelConfig) -> dict:
     elif i == "socketcan":
         if cfg.fd:
             kw["fd"] = True
+    elif i in ("gvret", "obdlink"):
+        # "COM6@1": GVRET's second CAN port; "COM7@ms": OBDLink on the MS-CAN (or "sw") pins
+        if isinstance(kw["channel"], str) and "@" in kw["channel"]:
+            kw["channel"], sub = kw["channel"].rsplit("@", 1)
+            if i == "gvret":
+                if sub not in ("0", "1"):
+                    raise ValueError(f"GVRET port after '@' must be 0 or 1, not {sub!r}")
+                kw["can_bus"] = int(sub)
+            else:
+                kw["can_pins"] = sub.lower()
+        if cfg.listen_only:
+            kw["listen_only"] = True
     elif i == "virtual":
         kw["receive_own_messages"] = False
     kw.update(cfg.extra or {})
@@ -219,7 +239,11 @@ def bus_kwargs(cfg: ChannelConfig) -> dict:
 
 
 def open_bus(cfg: ChannelConfig) -> can.BusABC:
-    return can.Bus(**bus_kwargs(cfg))
+    kw = bus_kwargs(cfg)
+    if kw["interface"] in _OWN_BUSES:
+        module, cls = _OWN_BUSES[kw.pop("interface")]
+        return getattr(importlib.import_module(module), cls)(**kw)
+    return can.Bus(**kw)
 
 
 def build_bus(interface: str, channel: Any, bitrate: int, **extra) -> can.BusABC:
@@ -302,6 +326,26 @@ def detect_devices(include_virtual: bool = True) -> list[Device]:
     if include_virtual:
         devices.append(Device("virtual", "canopener", "Virtual bus (no hardware)", "for trying things out"))
     return devices
+
+
+def device_present(cfg: ChannelConfig) -> Optional[bool]:
+    """Is the adapter behind this configuration still plugged in? None: cannot tell (then assume yes).
+
+    python-can's gs_usb (and some PCAN/Vector paths) never raise when the adapter is pulled, they just stop
+    delivering frames, so the receive thread asks this when the bus has been quiet for a while. Deliberately
+    conservative: False only when the device is certainly gone."""
+    i, ch = cfg.interface, _channel_value(cfg.interface, cfg.channel)
+    try:
+        if i == "slcan":
+            from serial.tools import list_ports
+            return str(ch).upper() in {p.device.upper() for p in list_ports.comports()}
+        if i == "gs_usb":
+            return int(ch) < len(_gs_usb_devices())
+        if i in ("pcan", "kvaser", "vector", "ixxat"):
+            return bool(can.detect_available_configs(interfaces=[i]))
+    except Exception as exc:
+        log.info("presence check of %s %s failed: %s", i, ch, exc)
+    return None
 
 
 def backends_info() -> list[dict]:

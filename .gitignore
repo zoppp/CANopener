@@ -15,3 +15,4 @@ projects/
 eds/
 plugins-local/
 .claude/
+bench-results/

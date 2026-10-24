@@ -184,7 +184,7 @@ def build_mcp(svc) -> MCPServer:
     @mcp.tool()
     def connect_channel(interface: str, channel: str = "", bitrate: int = 250000, fd: bool = False,
                         data_bitrate: int = 2000000, listen_only: bool = False, index: Optional[int] = None) -> Out:
-        """Open an adapter (interface: pcan, kvaser, slcan, gs_usb, vector, ixxat, socketcan, virtual)."""
+        """Open an adapter (interface: pcan, kvaser, slcan, gs_usb, vector, ixxat, gvret, obdlink, socketcan, virtual)."""
         return run(svc.connect, {"interface": interface, "channel": channel or None, "bitrate": bitrate, "fd": fd,
                                  "data_bitrate": data_bitrate, "listen_only": listen_only, "index": index})
 

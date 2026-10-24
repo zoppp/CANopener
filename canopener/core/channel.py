@@ -22,12 +22,16 @@ from typing import Callable, Optional
 
 import can
 
-from .adapters import BACKENDS, ChannelConfig, open_bus
+from .adapters import BACKENDS, ChannelConfig, device_present, open_bus
 
 log = logging.getLogger(__name__)
 
 F_EXT, F_RTR, F_ERR, F_FD, F_BRS, F_ESI, F_TX = 1, 2, 4, 8, 16, 32, 64
 
+QUIET_PROBE_S = 1.5             # bus silent this long: check the adapter is still plugged in
+RETRY_S = 1.0                   # between attempts to reopen a lost adapter
+SHUTDOWN_WAIT_S = 3.0           # a dead driver handle must not hang disconnect/reconnect
+DRIVER_STATS_S = 1.0            # driver bus state / hardware load is polled this often, off the stats() path
 DEFAULT_RING = 262_144          # trace frames kept per channel (~2 min at 2k frames/s)
 _serials = itertools.count(1)
 
@@ -155,6 +159,9 @@ class Channel:
         self._given_bus = bus is not None
         self._thread: Optional[threading.Thread] = None
         self._stop = threading.Event()
+        self._poll_stop = threading.Event()
+        self._poll_thread: Optional[threading.Thread] = None
+        self._hw: dict = {}                       # last driver stats, written only by the poller
         self._send_lock = threading.Lock()
         # receive table, ring and counters; re-entrant because send() holds it around bus.send() + _ingest(),
         # so a reply can never enter the trace before the request that caused it
@@ -171,6 +178,7 @@ class Channel:
         self.generation = 0                       # +1 on clear(): readers drop what they have
         self.state = "closed"                     # closed | open | error
         self.error = ""
+        self.reconnects = 0                       # times the adapter came back after being unplugged
         self._reset_counters()
 
     # ------------------------------------------------------------------ lifecycle
@@ -202,21 +210,71 @@ class Channel:
         self.state, self.error = "open", ""
         self._thread = threading.Thread(target=self._run, name=f"rx-{self.name}", daemon=True)
         self._thread.start()
+        self._poll_stop = threading.Event()       # fresh: an abandoned poller from a hung close() stays stopped
+        self._poll_thread = threading.Thread(target=self._poll_driver, name=f"hw-{self.name}", daemon=True)
+        self._poll_thread.start()
         return self
 
     def close(self) -> None:
         self._stop.set()
+        self._poll_stop.set()
         if self._thread is not None:
             self._thread.join(2.0)
             self._thread = None
+        if self._poll_thread is not None:
+            self._poll_thread.join(0.2)           # may be inside a hung driver call: daemon, abandoned
+            self._poll_thread = None
+        self._hw = {}
         with self._send_lock:                     # never shut the bus down under a send in progress
             bus, self._bus = self._bus, None
         if bus is not None and not self._given_bus:
+            self._shutdown_bus(bus)
+        self.state = "closed"
+
+    def _shutdown_bus(self, bus) -> None:
+        """bus.shutdown() on a worker thread: on an unplugged adapter some drivers raise, some block."""
+        def work():
             try:
                 bus.shutdown()
-            except Exception:
-                log.exception("%s: shutdown failed", self.name)
-        self.state = "closed"
+            except Exception as exc:
+                log.warning("%s: shutdown failed: %s", self.name, exc)
+        t = threading.Thread(target=work, name=f"shutdown-{self.name}", daemon=True)
+        t.start()
+        t.join(SHUTDOWN_WAIT_S)
+        if t.is_alive():
+            log.warning("%s: shutdown did not finish in %.0f s; abandoned", self.name, SHUTDOWN_WAIT_S)
+
+    def _lose_bus(self, why: str) -> None:
+        """The adapter went away: drop the dead bus, keep the channel (the receive thread reopens it)."""
+        with self._send_lock:
+            bus, self._bus = self._bus, None
+        self._hw = {}                             # do not show the dead bus's values as live
+        self.state, self.error = "error", why
+        log.warning("%s: %s", self.name, why)
+        if bus is not None:
+            self._shutdown_bus(bus)
+
+    def _try_reopen(self) -> bool:
+        if device_present(self.cfg) is False:
+            return False
+        try:
+            bus = open_bus(self.cfg)
+        except Exception as exc:
+            self.error = f"adapter lost, reopen failed: {type(exc).__name__}: {exc}"
+            return False
+        with self._send_lock:
+            if self._stop.is_set():               # closed while we were opening
+                stale = bus
+            else:
+                stale, self._bus = None, bus
+        if stale is not None:
+            self._shutdown_bus(stale)
+            return False
+        self._ts_offset = None
+        self.state, self.error = "open", ""
+        self.reconnects += 1
+        log.info("%s: adapter back, channel reopened", self.name)
+        return True
 
     def reopen(self, bitrate: Optional[int] = None, data_bitrate: Optional[int] = None) -> None:
         """Close and open again, optionally at another bit rate (bit-rate change of a node)."""
@@ -235,15 +293,26 @@ class Channel:
 
     # ------------------------------------------------------------------ receive
     def _run(self) -> None:
-        bus = self._bus
-        recv = bus.recv
         consecutive = 0
         host_clock = self.cfg.interface in ("gs_usb", "slcan")   # device counter wraps / no hw stamps
         win_min, win_start = float("inf"), time.time()
+        last_rx = time.time()
+        can_reopen = not self._given_bus
         while not self._stop.is_set():
+            bus = self._bus
+            if bus is None:                       # adapter lost: wait for it to come back
+                if not can_reopen:
+                    return
+                if self._stop.wait(RETRY_S):
+                    return
+                if self._try_reopen():
+                    consecutive, last_rx = 0, time.time()
+                continue
             try:
-                msg = recv(0.05)
+                msg = bus.recv(0.05)
             except Exception as exc:              # driver errors (bus off, unplugged adapter, ...)
+                if self._bus is not bus:
+                    continue
                 consecutive += 1
                 self.rx_errors += 1
                 self.error = f"{type(exc).__name__}: {exc}"
@@ -251,8 +320,18 @@ class Channel:
                     log.warning("%s: receive error #%d: %s", self.name, consecutive, exc)
                 if consecutive >= 20:
                     self.state = "error"
+                    if can_reopen and consecutive == 20:
+                        self._lose_bus(f"adapter lost ({self.error})")
+                        continue
                 self._stop.wait(0.5 if consecutive >= 20 else 0.02)
                 continue
+            if msg is None and can_reopen and time.time() - last_rx > QUIET_PROBE_S:
+                last_rx = time.time() - QUIET_PROBE_S + 1.0   # probe again in ~1 s, not on every poll
+                if device_present(self.cfg) is False:
+                    self._lose_bus("adapter unplugged; waiting for it to come back")
+                    continue
+            elif msg is not None:
+                last_rx = time.time()
             if consecutive:
                 consecutive = 0
                 if self.state == "error":
@@ -446,16 +525,24 @@ class Channel:
             "fps": round(fps, 1), "load": round(load, 2), "eps": round(eps, 1),
             "peak_load": round(self.peak_load, 2), "peak_fps": round(self.peak_fps, 1),
             "ids": len(self.rows), "written": self.written, "t_open": self.t_open,
-            "taps_dropped": sum(t.dropped for t in self.taps),
+            "taps_dropped": sum(t.dropped for t in self.taps), "reconnects": self.reconnects,
         }
-        out.update(self._driver_stats())
+        out.update(self._hw)
         return out
 
-    def _driver_stats(self) -> dict:
-        bus = self._bus
+    def _poll_driver(self) -> None:
+        """Poller thread: driver calls (bus.state, Kvaser get_stats) can take seconds, so they never run in stats()."""
+        stop = self._poll_stop
+        while not stop.is_set():
+            bus = self._bus                       # read fresh: the receive thread drops and reopens it
+            if bus is not None:
+                out = self._driver_stats(bus)
+                if self._bus is bus and not stop.is_set():
+                    self._hw = out
+            stop.wait(DRIVER_STATS_S)
+
+    def _driver_stats(self, bus) -> dict:
         out = {}
-        if bus is None:
-            return out
         try:
             st = bus.state
             out["bus_state"] = st.name if hasattr(st, "name") else str(st)

@@ -22,6 +22,7 @@ hidden = (
        "can.interfaces.ixxat", "can.interfaces.ixxat.canlib",
        "can.io.asc", "can.io.blf", "can.io.canutils", "can.io.csv", "can.io.trc",
        "serial", "serial.tools.list_ports", "serial.tools.list_ports_windows",
+       "serial.urlhandler.protocol_socket",          # socket://ip:port for WiFi GVRET and OBDLink
        "usb", "usb.backend.libusb1", "gs_usb", "libusb_package"]
 )
 datas = (

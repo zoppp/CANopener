@@ -135,6 +135,8 @@ use one of them, a report of what works and what does not helps (an issue on the
 | CANable with candleLight firmware | CANable / candleLight (USB) | `0` | Not yet | A USB device; libusb is included. Classic CAN only, no listen-only. |
 | Vector | Vector | the driver's global channel index, `0`, `1`, ... | Not yet | Needs the Vector driver library. Listen-only and CAN FD. |
 | IXXAT | IXXAT | `0`, `1`, ... | Not yet | Needs the IXXAT VCI driver. CAN FD; no listen-only. |
+| ESP32RET, Macchina M2 and other GVRET boards | GVRET (ESP32RET, Macchina M2) | the COM port, for example `COM6`, or `socket://192.168.4.1:23` over WiFi | Not yet | Classic CAN only. Listen-only. USB-UART boards are opened at 1 Mbaud (ESP32RET's default); CANopener holds DTR and RTS low so the board does not reset. Dual-CAN boards: add `@1` to the channel for the second CAN port (`COM6@1`). One port at a time: opening one switches the other off. |
+| OBDLink MX, MX+, LX, SX, EX | OBDLink MX/LX/SX/EX (OBD-II) | the COM port, for example `COM7`; OBDLink MX WiFi: `socket://192.168.0.10:35000` | Not yet | Plugs into a vehicle's OBD-II port: high-speed CAN on pins 6 and 14; add `@ms` to the channel for medium-speed CAN on pins 3 and 11 (`COM7@ms`), `@sw` for single-wire CAN on pin 1 (models that have them; the dongle refuses otherwise). Classic CAN only. Listen-only (no CAN ACKs). Receiving runs through a serial or Bluetooth link, so a busy bus can be more than the dongle passes on: it then stops with **BUFFER FULL**, and CANopener restarts it and counts the overrun. Sending is slow: each frame stops receiving, sends, listens 20 ms for answers (so an SDO or LSS reply is caught) and starts receiving again. Other frames during a send are missed, and the receive list pauses for the length of each send, so cyclic sends of more than a few frames per second are not useful. Needs a genuine OBDLink (STN chip); plain ELM327 clones are refused. |
 | Linux SocketCAN | Linux SocketCAN | `can0`, ... | Not yet | Linux only (from source). Set the bit rate in the operating system (`ip link`); the bit rate field is disabled. |
 | Virtual | Virtual (no hardware) | any name, default `canopener` | Yes (the test suite runs on it) | A bus inside CANopener for trying things and for tests. |
 
@@ -151,24 +153,45 @@ The **Bit rate** list offers 10, 20, 50, 83.3, 100, 125, 250, 500, 800 and 1000 
 that a backend's driver does not list (slcan has no 800 kbit/s, IXXAT no 83.3 kbit/s) and says so when you
 connect. Whether each adapter really runs every rate it accepts has not been tested yet.
 
+**OBDLink over Bluetooth.** Pair the dongle in Windows Bluetooth settings first. Windows then gives it two COM
+ports; use the **outgoing** one (More Bluetooth settings > COM Ports, "OBDLink MX ... Outgoing"). The device list
+does not show OBDLink dongles: type the COM port as the channel.
+
 ### More adapters (help wanted)
 
-We are working on support for cheaper and wireless adapters, as plugins shipped with CANopener. None of it is
-available yet, and nothing here is a recommendation: we do not have the hardware to test these devices. The
-plan:
+We are working on support for more cheap and wireless adapters. None of it is available yet, and nothing here is
+a recommendation: we do not have the hardware to test these devices. The plan:
 
-- **ESP32 boards running GVRET firmware** (ESP32RET and other SavvyCAN-compatible devices), over USB and WiFi.
 - **slcan over WiFi** (TCP), for devices that speak the same protocol as a CANable, such as WiCAN.
-- **ELM327 and OBDLink OBD-II dongles**, over USB, Bluetooth and WiFi, as bus monitors. The Linux kernel's
+- **ELM327 clones** (not OBDLink) as bus monitors. The Linux kernel's
   [ELM327 driver documentation](https://docs.kernel.org/networking/device_drivers/can/can327.html) notes that a
   busy bus can overflow the chip's buffer ("BUFFER FULL") and that clones do not all implement every feature. We
   have not measured this ourselves.
 
-New adapter types will open listen-only by default.
-
 CANopener is open source, so you can help. If you own one of these devices and can test, or want to write or
 improve support for it, open an issue on the project's GitHub page and say which device and firmware you have.
 A device joins the table above only after it has been tested.
+
+### Test an adapter on a bench
+
+`tests/hardware/bench_adapters.py` (from source) checks an adapter's row in the table above on a real bus. Put
+the adapter under test and a reference adapter that already works on one bench bus, terminated (120 ohm at each
+end), with nothing else powered on it. The bench floods the bus, so never run it on a machine.
+
+```
+.venv\Scripts\python tests\hardwareench_adapters.py --ref kvaser:0 --dut pcan:PCAN_USBBUS1
+```
+
+It checks: the adapter is detected; open and close; every frame kind (both ID lengths, DLC 0 to 8, remote
+frames) both ways at 125, 250, 500 and 1000 kbit/s (`--rates all` for every rate in the list); bursts and
+seconds of full bus load without a lost, repeated or reordered frame; the transmit list (a single frame, a
+10 ms cycle and that it stops); that listen-only really sends no ACK (the reference then repeats its frame);
+and CAN FD with `--fd` when both adapters have FD hardware. Use `--note` for firmware and cabling. The report
+(markdown and JSON) goes to `bench-results/`; attach it to an issue.
+
+`--ref none` listens on a live bus without a reference (for example an OBDLink in a vehicle): receive
+statistics, overruns, close and reopen. It sends nothing, except one OBD-II request with `--obd-request`, which
+asks first.
 
 ### Listen-only
 
@@ -1330,7 +1353,8 @@ lists the commands, `canopener-cli.exe <command> --help` the options.
 | `replay` | Plays a recorded file onto the bus: `--speed`, `--only` (all, rx, tx). |
 | `convert` | Converts between recording formats, by extension. |
 
-The bus commands take `--interface` (pcan, kvaser, slcan, gs_usb, vector, ixxat, socketcan, virtual; default
+The bus commands take `--interface` (pcan, kvaser, slcan, gs_usb, vector, ixxat, gvret, obdlink, socketcan,
+virtual; default
 virtual), `--channel`, `--bitrate` (bit/s, default 250000), `--fd`, `--data-bitrate`, and `-v` to print every
 step and frame. The command line does not start the simulator: without `--interface`, a `scan` finds an empty
 virtual bus.

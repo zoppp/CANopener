@@ -35,8 +35,9 @@ the virtual bus and simulator; for real hardware, see the status above.
   defined on raw frames without a DBC.
 - **Adapters**: backends for PEAK PCAN, Kvaser, CANable (slcan and candleLight/gs_usb, libusb bundled), Vector,
   IXXAT, SocketCAN and virtual, with CAN FD settings where the backend has them; several channels at once. Only
-  Kvaser tested on hardware so far (receiving, and sending by replay, at 250 kbit/s). ESP32 (GVRET), WiFi slcan
-  and ELM327/OBDLink support is planned but untested: [help wanted](docs/user-guide.md#more-adapters-help-wanted).
+  Kvaser tested on hardware so far (receiving, and sending by replay, at 250 kbit/s). GVRET boards (ESP32RET,
+  Macchina M2; USB or WiFi) and OBDLink OBD-II dongles (MX, MX+, LX, SX, EX; Bluetooth, USB or WiFi) are new and
+  untested on hardware. WiFi slcan and ELM327 clones are planned: [help wanted](docs/user-guide.md#more-adapters-help-wanted).
 - **Plugins**: tabs, REST routes, MCP tools and live frame consumers ([docs/PLUGINS.md](docs/PLUGINS.md)).
 - **Claude**: MCP at `http://127.0.0.1:8775/mcp/`; read tools (and scans, which send only SDO read requests, plus an SDO abort to node ids that do not answer) can be allowlisted in Claude Code; keep changes to nodes and your own frames on approval there.
 

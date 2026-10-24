@@ -6,6 +6,29 @@ version's section.
 
 ## Unreleased
 
+## 2026.10.23.2147 - 2026-10-23
+
+### Added
+
+- GVRET adapter: ESP32RET, Macchina M2 and other SavvyCAN-compatible boards, over USB serial or WiFi
+  (`socket://<ip>:23`). Classic CAN, listen-only; `COM6@1` for the second CAN port of dual-CAN boards. Not
+  tested on hardware yet.
+- OBDLink adapter: OBDLink MX, MX+, LX, SX and EX OBD-II dongles (STN chip), over Bluetooth, USB or WiFi
+  (`socket://<ip>:35000`). Receives with the dongle's monitor; each send pauses receiving and listens 20 ms for
+  answers. Listen-only means no CAN ACKs. `COM7@ms` / `@sw` for MS-CAN and single-wire CAN. A monitor stopped
+  by BUFFER FULL is restarted and counted; after a dongle reset it is set up again. Plain ELM327 clones are
+  refused. Not tested on hardware yet.
+- GVRET and OBDLink are marked "untested" in the adapter list until they have been on hardware.
+
+### Fixed
+
+- An adapter unplugged while connected is noticed (after 1.5 s of silence the channel checks it is still
+  there) and reopened by itself when it is plugged back in; the channel shows an adapter error in between.
+  Disconnecting an unplugged adapter no longer hangs. Checked on a Kvaser: recording, Disconnect/Connect and
+  quick replugs all recover.
+- The UI and `/api/status` no longer crawl (and show 0 % load) when the adapter driver is slow to report its
+  bus state and load: the driver is asked once a second on its own thread, not on every UI update.
+
 ## 2026.10.18.2212 - 2026-10-18
 
 ### Added
